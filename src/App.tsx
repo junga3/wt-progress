@@ -39,7 +39,59 @@ const RANKS = [
 ];
 
 const TOTAL_POINTS = 2400;
+const STORAGE_KEY = "wt-progress-tracker-state";
 const SEASON_START = new Date("2026-03-26T00:00:00");
+
+function getTodayStamp() {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, "0");
+  const day = String(now.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function getSavedTrackerState() {
+  if (typeof window === "undefined") {
+    return {
+      currentPoints: 0,
+      todayEarned: 0,
+      manualPoints: 5,
+      matchMode: "cashout" as "cashout" | "quickplay" | "quickcash",
+    };
+  }
+
+  try {
+    const saved = window.localStorage.getItem(STORAGE_KEY);
+    if (!saved) {
+      return {
+        currentPoints: 0,
+        todayEarned: 0,
+        manualPoints: 5,
+        matchMode: "cashout" as "cashout" | "quickplay" | "quickcash",
+      };
+    }
+
+    const parsed = JSON.parse(saved);
+    const todayStamp = getTodayStamp();
+    const savedStamp = parsed.savedDate ?? "";
+
+    return {
+      currentPoints: clamp(Number(parsed.currentPoints ?? 0), 0, TOTAL_POINTS),
+      todayEarned: savedStamp === todayStamp ? Math.max(0, Number(parsed.todayEarned ?? 0)) : 0,
+      manualPoints: clamp(Number(parsed.manualPoints ?? 5), 1, 100),
+      matchMode: ["cashout", "quickplay", "quickcash"].includes(parsed.matchMode)
+        ? parsed.matchMode
+        : ("cashout" as "cashout" | "quickplay" | "quickcash"),
+    };
+  } catch {
+    return {
+      currentPoints: 0,
+      todayEarned: 0,
+      manualPoints: 5,
+      matchMode: "cashout" as "cashout" | "quickplay" | "quickcash",
+    };
+  }
+}
 const SEASON_END = new Date("2026-07-09T23:59:59");
 
 const tierPanel = {
@@ -117,12 +169,12 @@ function getProjectedCompletionDate(points: number) {
 }
 
 export default function WTProgressAppleRedesign() {
-  const [currentPoints, setCurrentPoints] = useState(0);
-  const [inputValue, setInputValue] = useState("0");
-  const [matchMode, setMatchMode] = useState<"cashout" | "quickplay" | "quickcash">("cashout");
-  const [manualPoints, setManualPoints] = useState(5);
+  const [currentPoints, setCurrentPoints] = useState(() => getSavedTrackerState().currentPoints);
+  const [inputValue, setInputValue] = useState(() => String(getSavedTrackerState().currentPoints));
+  const [matchMode, setMatchMode] = useState<"cashout" | "quickplay" | "quickcash">(() => getSavedTrackerState().matchMode);
+  const [manualPoints, setManualPoints] = useState(() => getSavedTrackerState().manualPoints);
   const [history, setHistory] = useState<number[]>([]);
-  const [todayEarned, setTodayEarned] = useState(0);
+  const [todayEarned, setTodayEarned] = useState(() => getSavedTrackerState().todayEarned);
 
   const { currentRank, nextRank, tier } = useMemo(() => getRankInfo(currentPoints), [currentPoints]);
 
@@ -149,10 +201,32 @@ export default function WTProgressAppleRedesign() {
   const seasonElapsedPct = clamp((elapsedSeasonDays / totalSeasonDays) * 100, 0, 100);
   const isOnPace = fullCompletionPct >= seasonElapsedPct;
 
-  function applyPoints(nextValue: number) {
+  function persistTrackerState(next: {
+    currentPoints: number;
+    todayEarned: number;
+    manualPoints: number;
+    matchMode: "cashout" | "quickplay" | "quickcash";
+  }) {
+    if (typeof window === "undefined") return;
+    window.localStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify({
+        ...next,
+        savedDate: getTodayStamp(),
+      })
+    );
+  }
+
+  function applyPoints(nextValue: number, nextTodayEarned = todayEarned) {
     const safe = clamp(nextValue, 0, TOTAL_POINTS);
     setCurrentPoints(safe);
     setInputValue(String(safe));
+    persistTrackerState({
+      currentPoints: safe,
+      todayEarned: nextTodayEarned,
+      manualPoints,
+      matchMode,
+    });
   }
 
   function updateFromInput() {
@@ -162,17 +236,19 @@ export default function WTProgressAppleRedesign() {
   }
 
   function quickAdd(amount: number) {
+    const nextTodayEarned = todayEarned + amount;
     setHistory((prev) => [...prev, amount]);
-    setTodayEarned((prev) => prev + amount);
-    applyPoints(currentPoints + amount);
+    setTodayEarned(nextTodayEarned);
+    applyPoints(currentPoints + amount, nextTodayEarned);
   }
 
   function undoLastAdd() {
     const last = history[history.length - 1];
     if (!last) return;
+    const nextTodayEarned = Math.max(0, todayEarned - last);
     setHistory((prev) => prev.slice(0, -1));
-    setTodayEarned((prev) => Math.max(0, prev - last));
-    applyPoints(currentPoints - last);
+    setTodayEarned(nextTodayEarned);
+    applyPoints(currentPoints - last, nextTodayEarned);
   }
 
   const matchButtons = {
