@@ -1,73 +1,71 @@
-# React + TypeScript + Vite
+# WT Progress
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+WT Progress is a lightweight companion site for tracking progression in THE FINALS. It currently includes two tools:
 
-Currently, two official plugins are available:
+- `World Tour progress companion`
+- `Statistics Badge Progression`
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+The app is built as a GitHub Pages-friendly single-page React app with route-based pages and local persistence for user-entered progress.
 
-## React Compiler
+Live site: [https://junga3.github.io/wt-progress/](https://junga3.github.io/wt-progress/)
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+## What It Is For
 
-## Expanding the ESLint configuration
+This project is meant to give players a cleaner way to keep track of long-term progression without relying on spreadsheets or manual notes.
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+The current pages are:
 
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
+- `World Tour progress companion`
+  Track current World Tour points, season pace, rank progress, and quick match result logging.
+- `Statistics Badge Progression`
+  Enter lifetime totals for eliminations, revives, cash, and wins to see badge progression and milestone progress.
 
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
+## Technologies Used
 
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+- `React 19`
+- `TypeScript`
+- `Vite`
+- `Tailwind CSS v4`
+- `shadcn/ui`
+- `Framer Motion`
+- `Lucide React`
+- `GitHub Pages`
+
+## Local Development
+
+Install dependencies:
+
+```bash
+npm install
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+Start the dev server:
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
-
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```bash
+npm run dev
 ```
+
+Create a production build:
+
+```bash
+npm run build
+```
+
+Preview the production build locally:
+
+```bash
+npm run preview
+```
+
+## Routing
+
+The app is deployed under the GitHub Pages base path:
+
+- `/wt-progress/world-tour-progress`
+- `/wt-progress/statistics-badge-progression`
+
+The project includes a `404.html` redirect fallback so direct links keep working on GitHub Pages.
+
+## Deployment
+
+Pushes to `main` trigger the GitHub Actions workflow in `.github/workflows/deploy.yml`, which builds the app and deploys the `dist` output to GitHub Pages.
