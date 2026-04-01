@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>THE FINALS Tracker Redirect</title>
+    <script>
+      (function () {
+        var base = "/wt-progress/";
+        var currentPath = window.location.pathname;
+        var relativePath = currentPath.indexOf(base) === 0
+          ? currentPath.slice(base.length)
+          : currentPath.replace(/^\//, "");
+        var redirect = base + "?p=" + encodeURIComponent(relativePath + window.location.search + window.location.hash);
+        window.location.replace(redirect);
+      })();
+    </script>
+  </head>
+  <body></body>
+</html>

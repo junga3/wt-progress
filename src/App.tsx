@@ -1,17 +1,20 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import {
   CalendarDays,
   ChevronDown,
   ChevronRight,
+  Moon,
   RotateCcw,
   Medal,
   Sparkles,
+  Sun,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
 import { cn } from "@/lib/utils";
+import { StatisticsBadgeProgressionPage } from "@/pages/StatisticsBadgeProgressionPage";
 
 const RANKS = [
   { name: "Bronze IV", points: 25, short: "B4", tier: "Bronze" },
@@ -42,6 +45,7 @@ const RANKS = [
 
 const TOTAL_POINTS = 2400;
 const STORAGE_KEY = "wt-progress-tracker-state";
+const STYLE_MODE_STORAGE_KEY = "wt-progress-style-mode";
 const SEASON_START = new Date("2026-03-26T00:00:00");
 
 function getTodayStamp() {
@@ -136,8 +140,58 @@ const tierChip = {
   Unranked: "border-slate-200 bg-slate-50/90",
 };
 
+type SiteId = "world-tour" | "statistics-badges";
+type StyleMode = "rebuilt" | "original";
+const APP_BASE_PATH = import.meta.env.BASE_URL;
+
+const SITE_OPTIONS = [
+  {
+    id: "world-tour" as const,
+    label: "World Tour progress companion",
+    path: "world-tour-progress",
+    title: "Track the climb.\nKeep the momentum.",
+    description:
+      "Log matches in one tap, see whether you are on pace, and keep your attention on the next rank instead of a spreadsheet.",
+    preview: "Match logging, pace, and milestone planning",
+  },
+  {
+    id: "statistics-badges" as const,
+    label: "Statistics Badge Progression",
+    path: "statistics-badge-progression",
+    title: "Statistics Badge Progression",
+    description:
+      "Enter your lifetime totals for eliminations, revives, cash, and wins to preview each badge tier and the next milestone in a cleaner card layout.",
+    preview: "Four statistic badge cards with tier progression",
+  },
+];
+
 const formatNumber = (value: number) => new Intl.NumberFormat().format(Math.max(0, Math.round(value)));
 const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
+
+function getSiteHref(sitePath: string) {
+  return `${APP_BASE_PATH}${sitePath}`;
+}
+
+function getRelativeAppPath(pathname: string) {
+  const normalizedBase = APP_BASE_PATH.endsWith("/")
+    ? APP_BASE_PATH.slice(0, -1)
+    : APP_BASE_PATH;
+
+  if (pathname === normalizedBase || pathname === `${normalizedBase}/`) {
+    return "/";
+  }
+
+  return pathname.startsWith(normalizedBase)
+    ? pathname.slice(normalizedBase.length) || "/"
+    : pathname;
+}
+
+function getSiteFromPathname(pathname: string): SiteId {
+  const relativePath = getRelativeAppPath(pathname);
+  return relativePath.includes("statistics-badge-progression")
+    ? "statistics-badges"
+    : "world-tour";
+}
 
 function daysBetween(a: Date, b: Date) {
   const oneDay = 1000 * 60 * 60 * 24;
@@ -148,16 +202,6 @@ function getDaysRemaining(endDate: Date) {
   const now = new Date();
   const oneDay = 1000 * 60 * 60 * 24;
   return Math.max(0, Math.ceil((endDate.getTime() - now.getTime()) / oneDay));
-}
-
-function addDays(date: Date, days: number) {
-  const next = new Date(date);
-  next.setDate(next.getDate() + days);
-  return next;
-}
-
-function formatDate(date: Date) {
-  return new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric" }).format(date);
 }
 
 function getRankInfo(points: number) {
@@ -187,16 +231,21 @@ function getNextRankProgress(points: number) {
   return clamp(((points - base) / range) * 100, 0, 100);
 }
 
-function getProjectedCompletionDate(points: number) {
-  const today = new Date();
-  const elapsedDays = Math.max(1, daysBetween(SEASON_START, today));
-  const avgPerDay = points / elapsedDays;
-  if (avgPerDay <= 0) return null;
-  const daysNeeded = Math.ceil((TOTAL_POINTS - points) / avgPerDay);
-  return addDays(today, Math.max(0, daysNeeded));
+function getSavedStyleMode(): StyleMode {
+  if (typeof window === "undefined") return "rebuilt";
+
+  const saved = window.localStorage.getItem(STYLE_MODE_STORAGE_KEY);
+  return saved === "original" ? "original" : "rebuilt";
 }
 
 export default function WTProgressAppleRedesign() {
+  const [activeSite, setActiveSite] = useState<SiteId>(() =>
+    typeof window === "undefined"
+      ? "world-tour"
+      : getSiteFromPathname(window.location.pathname)
+  );
+  const [styleMode, setStyleMode] = useState<StyleMode>(() => getSavedStyleMode());
+  const [isSiteMenuOpen, setIsSiteMenuOpen] = useState(false);
   const [currentPoints, setCurrentPoints] = useState(() => getSavedTrackerState().currentPoints);
   const [inputValue, setInputValue] = useState(() => String(getSavedTrackerState().currentPoints));
   const [matchMode, setMatchMode] = useState<"cashout" | "quickplay" | "quickcash">(() => getSavedTrackerState().matchMode);
@@ -204,6 +253,7 @@ export default function WTProgressAppleRedesign() {
   const [history, setHistory] = useState<number[]>([]);
   const [todayEarned, setTodayEarned] = useState(() => getSavedTrackerState().todayEarned);
   const [showLadder, setShowLadder] = useState(false);
+  const siteMenuRef = useRef<HTMLDivElement | null>(null);
 
   const { currentRank, nextRank, tier } = useMemo(() => getRankInfo(currentPoints), [currentPoints]);
 
@@ -220,31 +270,81 @@ export default function WTProgressAppleRedesign() {
   const dailyPointsNeeded = seasonDaysRemaining > 0 ? Math.ceil(pointsNeeded / seasonDaysRemaining) : pointsNeeded;
   const fullCompletionPct = clamp((currentPoints / TOTAL_POINTS) * 100, 0, 100);
   const nextRankPct = getNextRankProgress(currentPoints);
-  const projectedCompletionDate = getProjectedCompletionDate(currentPoints);
   const pointsToNext = nextRank ? Math.max(0, nextRank.points - currentPoints) : 0;
-  const winsAway = nextRank ? Math.ceil(pointsToNext / 25) : 0;
   const remainingToday = Math.max(0, dailyPointsNeeded - todayEarned);
   const seasonElapsedPct = clamp((elapsedSeasonDays / totalSeasonDays) * 100, 0, 100);
   const isOnPace = fullCompletionPct >= seasonElapsedPct;
-  const pacePointsTarget = Math.round((seasonElapsedPct / 100) * TOTAL_POINTS);
-  const pacePointsGap = currentPoints - pacePointsTarget;
   const seasonLabel = "Mar 26 - Jul 9";
-  const paceGapLabel =
-    pacePointsGap === 0
-      ? "Right on pace"
-      : pacePointsGap > 0
-        ? `${formatNumber(pacePointsGap)} pts ahead`
-        : `${formatNumber(Math.abs(pacePointsGap))} pts behind`;
   const heroSubtitle = getHeroSub(currentPoints);
   const matchModes = [
-    { id: "cashout" as const, label: "Cashout", helper: "Big point swings" },
-    { id: "quickplay" as const, label: "Quickplay", helper: "Short sessions" },
+    { id: "cashout" as const, label: "Cashout", helper: "Ranked placement" },
     { id: "quickcash" as const, label: "Quick Cash", helper: "Placement based" },
+    { id: "quickplay" as const, label: "Quickplay", helper: "Short sessions" },
   ];
   const activeMode = matchModes.find((mode) => mode.id === matchMode) ?? matchModes[0];
-  const winsAwayLabel = nextRank
-    ? `${winsAway} Cashout ${winsAway === 1 ? "win" : "wins"} away`
-    : "Every milestone cleared";
+  const activeSiteConfig =
+    SITE_OPTIONS.find((site) => site.id === activeSite) ?? SITE_OPTIONS[0];
+  const visualStyleMode: StyleMode = "original";
+  const isOriginalStyle = visualStyleMode === "original";
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    const handlePopState = () => {
+      setActiveSite(getSiteFromPathname(window.location.pathname));
+      setIsSiteMenuOpen(false);
+    };
+
+    window.addEventListener("popstate", handlePopState);
+    return () => window.removeEventListener("popstate", handlePopState);
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    const currentRelativePath = getRelativeAppPath(window.location.pathname);
+    const nextPath = `/${activeSiteConfig.path}`;
+
+    if (currentRelativePath === "/" && activeSite === "world-tour") {
+      window.history.replaceState(null, "", getSiteHref(activeSiteConfig.path));
+      return;
+    }
+
+    if (currentRelativePath !== nextPath) {
+      window.history.replaceState(null, "", getSiteHref(activeSiteConfig.path));
+    }
+  }, [activeSite, activeSiteConfig.path]);
+
+  useEffect(() => {
+    if (!isSiteMenuOpen) return;
+
+    const handlePointerDown = (event: PointerEvent) => {
+      if (siteMenuRef.current && !siteMenuRef.current.contains(event.target as Node)) {
+        setIsSiteMenuOpen(false);
+      }
+    };
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setIsSiteMenuOpen(false);
+      }
+    };
+
+    document.addEventListener("pointerdown", handlePointerDown);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("pointerdown", handlePointerDown);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [isSiteMenuOpen]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    window.localStorage.setItem(STYLE_MODE_STORAGE_KEY, styleMode);
+    document.documentElement.dataset.styleMode = visualStyleMode;
+    document.documentElement.style.colorScheme = "light";
+  }, [styleMode, visualStyleMode]);
 
   function persistTrackerState(next: {
     currentPoints: number;
@@ -336,11 +436,40 @@ export default function WTProgressAppleRedesign() {
   };
 
   return (
-    <div className="relative min-h-screen overflow-hidden bg-[linear-gradient(180deg,#f3eadf_0%,#f8fafc_42%,#edf7f2_100%)] text-slate-900">
+    <div
+      data-style-mode={visualStyleMode}
+      className={cn(
+        "tf-app-shell relative min-h-screen overflow-hidden",
+        isOriginalStyle
+          ? "bg-[linear-gradient(180deg,#f3eadf_0%,#f8fafc_42%,#edf7f2_100%)] text-slate-900"
+          : "bg-[#050506] text-[var(--tf-cream)]"
+      )}
+    >
       <div className="pointer-events-none absolute inset-0 overflow-hidden">
-        <div className="absolute left-[-6rem] top-[-4rem] h-72 w-72 rounded-full bg-amber-200/55 blur-3xl" />
-        <div className="absolute right-[-5rem] top-24 h-80 w-80 rounded-full bg-emerald-200/35 blur-3xl" />
-        <div className="absolute bottom-[-8rem] left-1/2 h-72 w-72 -translate-x-1/2 rounded-full bg-sky-200/25 blur-3xl" />
+        <div
+          className={cn(
+            "absolute rounded-full blur-3xl",
+            isOriginalStyle
+              ? "left-[-6rem] top-[-4rem] h-72 w-72 bg-amber-200/55"
+              : "left-[-8rem] top-[-6rem] h-80 w-80 bg-[#ff5c1f]/18"
+          )}
+        />
+        <div
+          className={cn(
+            "absolute rounded-full blur-3xl",
+            isOriginalStyle
+              ? "right-[-5rem] top-24 h-80 w-80 bg-emerald-200/35"
+              : "right-[-6rem] top-14 h-96 w-96 bg-[#ff2d00]/14"
+          )}
+        />
+        <div
+          className={cn(
+            "absolute left-1/2 -translate-x-1/2 rounded-full blur-3xl",
+            isOriginalStyle
+              ? "bottom-[-8rem] h-72 w-72 bg-sky-200/25"
+              : "bottom-[-10rem] h-80 w-80 bg-white/6"
+          )}
+        />
       </div>
 
       <div className="relative mx-auto max-w-6xl px-4 py-8 md:px-6 lg:px-8">
@@ -348,61 +477,205 @@ export default function WTProgressAppleRedesign() {
           initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.35 }}
-          className="rounded-[2.25rem] border border-white/70 bg-white/75 px-6 py-7 shadow-[0_20px_60px_rgba(15,23,42,0.08)] backdrop-blur-xl md:px-8 md:py-8"
+          className={cn(
+            isOriginalStyle
+              ? "rounded-[2.25rem] border border-white/70 bg-white/75 px-6 py-7 shadow-[0_20px_60px_rgba(15,23,42,0.08)] backdrop-blur-xl md:px-8 md:py-8"
+              : "tf-panel tf-panel-accent rounded-[2.2rem] px-6 py-7 md:px-8 md:py-8"
+          )}
         >
-          <div className="max-w-3xl">
-            <div className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-slate-50 px-4 py-2 text-xs font-semibold uppercase tracking-[0.22em] text-slate-500">
-              <Sparkles className="h-4 w-4" />
-              World Tour progress companion
+          <div className="relative z-10">
+            <div className="flex items-start justify-between gap-4">
+              <div ref={siteMenuRef} className="relative inline-flex">
+                <button
+                  type="button"
+                  onClick={() => setIsSiteMenuOpen((prev) => !prev)}
+                  className="tf-route-button inline-flex items-center gap-2 rounded-full px-4 py-2 text-xs font-semibold uppercase tracking-[0.22em] transition hover:border-white/20 hover:bg-white/10"
+                >
+                  <Sparkles className={cn("h-4 w-4", isOriginalStyle ? "text-slate-900" : "text-[#ff5c1f]")} />
+                  {activeSiteConfig.label}
+                  <ChevronDown
+                    className={cn(
+                      "h-4 w-4 transition-transform",
+                      isSiteMenuOpen ? "rotate-180" : ""
+                    )}
+                  />
+                </button>
+
+                <AnimatePresence>
+                  {isSiteMenuOpen ? (
+                    <motion.div
+                      initial={{ opacity: 0, y: 8, scale: 0.98 }}
+                      animate={{ opacity: 1, y: 0, scale: 1 }}
+                      exit={{ opacity: 0, y: 8, scale: 0.98 }}
+                      transition={{ duration: 0.18 }}
+                      className={cn(
+                        "absolute left-0 top-[calc(100%+0.75rem)] z-30 w-80 rounded-[1.6rem] p-2",
+                        isOriginalStyle
+                          ? "border border-white/70 bg-white/90 shadow-[0_24px_60px_rgba(15,23,42,0.12)] backdrop-blur-xl"
+                          : "tf-panel tf-panel-soft"
+                      )}
+                    >
+                      {SITE_OPTIONS.map((site) => (
+                        <button
+                          key={site.id}
+                          type="button"
+                          onClick={() => {
+                            window.history.pushState(null, "", getSiteHref(site.path));
+                            setActiveSite(site.id);
+                            setIsSiteMenuOpen(false);
+                            window.scrollTo({ top: 0, behavior: "smooth" });
+                          }}
+                          className={cn(
+                            "tf-route-option flex w-full flex-col rounded-[1.2rem] px-4 py-3 text-left transition",
+                            activeSite === site.id
+                              ? isOriginalStyle
+                                ? "bg-slate-900 text-white"
+                                : "bg-[linear-gradient(90deg,#ff2d00,#ff5c1f)] text-white"
+                              : isOriginalStyle
+                                ? "text-slate-900 hover:bg-slate-100"
+                                : "text-[var(--tf-cream)] hover:bg-white/6"
+                          )}
+                        >
+                          <span className="text-sm font-semibold">{site.label}</span>
+                          <span
+                            className={cn(
+                              "mt-1 text-sm",
+                              activeSite === site.id
+                                ? "text-white/72"
+                                : isOriginalStyle
+                                  ? "text-slate-500"
+                                  : "text-[var(--tf-muted)]"
+                            )}
+                          >
+                            {site.preview}
+                          </span>
+                        </button>
+                      ))}
+                    </motion.div>
+                  ) : null}
+                </AnimatePresence>
+              </div>
+
+              <button
+                type="button"
+                onClick={() =>
+                  setStyleMode((prev) => (prev === "rebuilt" ? "original" : "rebuilt"))
+                }
+                aria-label={
+                  isOriginalStyle
+                    ? "Switch to rebuilt styling"
+                    : "Switch to original styling"
+                }
+                title={isOriginalStyle ? "Original styling" : "Rebuilt styling"}
+                className="tf-route-button inline-flex items-center gap-1 rounded-full p-1"
+              >
+                <span
+                  className={cn(
+                    "grid h-9 w-9 place-items-center rounded-full transition",
+                    isOriginalStyle
+                      ? "bg-white text-slate-900 shadow-sm"
+                      : "text-[var(--tf-muted)]"
+                  )}
+                >
+                  <Sun className="h-4 w-4" />
+                </span>
+                <span
+                  className={cn(
+                    "grid h-9 w-9 place-items-center rounded-full transition",
+                    isOriginalStyle
+                      ? "text-[var(--tf-muted)]"
+                      : "bg-[linear-gradient(90deg,#ff2d00,#ff5c1f)] text-white shadow-sm"
+                  )}
+                >
+                  <Moon className="h-4 w-4" />
+                </span>
+              </button>
             </div>
-            <h1 className="mt-6 text-4xl font-semibold tracking-tight md:text-6xl">
-              Track the climb. Keep the momentum.
-            </h1>
-            <p className="mt-4 max-w-2xl text-base leading-7 text-slate-600 md:text-lg">
-              Log matches in one tap, see whether you are on pace, and keep your
-              attention on the next rank instead of a spreadsheet.
-            </p>
+
+            <div className="mt-6 max-w-3xl">
+              <div className="tf-kicker">Contestant companion</div>
+              <h1 className="tf-display mt-3 max-w-4xl whitespace-pre-line text-5xl md:text-7xl">
+              {activeSiteConfig.title}
+              </h1>
+              <p
+                className={cn(
+                  "mt-4 max-w-2xl text-base leading-7 md:text-lg",
+                  isOriginalStyle ? "text-slate-600" : "text-[var(--tf-muted)]"
+                )}
+              >
+                {activeSiteConfig.description}
+              </p>
+            </div>
           </div>
 
-
           <div className="mt-6 flex flex-wrap gap-3 text-sm">
-            <InlineMeta label="Season" value={seasonLabel} />
-            <InlineMeta label="Days left" value={`${seasonDaysRemaining}`} />
-            <InlineMeta
-              label="Current rank"
-              value={currentRank?.name ?? "Unranked"}
-              valueClassName={tierText[(currentRank?.tier ?? "Unranked") as keyof typeof tierText]}
-              className={tierChip[(currentRank?.tier ?? "Unranked") as keyof typeof tierChip]}
-            />
-            <InlineMeta
-              label="Goal rank"
-              value="Emerald I"
-              valueClassName={tierText.Emerald}
-              className={tierChip.Emerald}
-            />
+            {activeSite === "world-tour" ? (
+              <>
+                <InlineMeta label="Season 10" value={seasonLabel} />
+                <InlineMeta label="Days left" value={`${seasonDaysRemaining}`} />
+                <InlineMeta
+                  label="Current rank"
+                  value={currentRank?.name ?? "Unranked"}
+                  valueClassName={tierText[(currentRank?.tier ?? "Unranked") as keyof typeof tierText]}
+                  className={tierChip[(currentRank?.tier ?? "Unranked") as keyof typeof tierChip]}
+                />
+                <InlineMeta
+                  label="Goal rank"
+                  value="Emerald I"
+                  valueClassName={tierText.Emerald}
+                  className={tierChip.Emerald}
+                />
+              </>
+            ) : (
+              <>
+                <InlineMeta label="Section" value="Statistics badges" />
+                <InlineMeta label="Tracked" value="4 categories" />
+                <InlineMeta label="Tiers" value="Bronze to Amethyst" />
+                <InlineMeta
+                  label="Status"
+                  value="Mockup"
+                  valueClassName="text-fuchsia-700"
+                  className="border-fuchsia-200 bg-fuchsia-50/90"
+                />
+              </>
+            )}
           </div>
         </motion.header>
 
-        <div className="mt-8 grid gap-6 xl:grid-cols-[1.35fr_0.95fr]">
+        {activeSite === "world-tour" ? (
+          <>
+            <div className="mt-8 grid gap-6 xl:grid-cols-[1.35fr_0.95fr]">
           <motion.section
             initial={{ opacity: 0, y: 16 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.04, duration: 0.35 }}
-            className={`rounded-[2.25rem] border bg-gradient-to-br ${tierPanel[tier as keyof typeof tierPanel]} p-6 shadow-[0_20px_60px_rgba(15,23,42,0.08)] md:p-8`}
+            className={cn(
+              isOriginalStyle
+                ? `rounded-[2.25rem] border bg-gradient-to-br p-6 shadow-[0_20px_60px_rgba(15,23,42,0.08)] md:p-8 ${tierPanel[tier as keyof typeof tierPanel]}`
+                : "tf-panel tf-panel-accent rounded-[2.25rem] p-6 md:p-8",
+              isOriginalStyle
+                ? ""
+                : "bg-[radial-gradient(circle_at_top_left,rgba(255,92,31,0.18),transparent_24%),linear-gradient(180deg,rgba(18,19,24,0.96),rgba(9,10,12,0.92))]"
+            )}
           >
             <div className="flex flex-col gap-8">
               <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
                 <div>
-                  <div className="text-sm font-semibold uppercase tracking-[0.22em] text-slate-500">
-                    Current progress
+                  <div
+                    className={cn(
+                      "text-sm font-semibold uppercase tracking-[0.22em]",
+                      isOriginalStyle ? "text-slate-500" : "text-slate-400"
+                    )}
+                  >
+                    World Tour status
                   </div>
                   <div className="mt-4 flex items-end gap-3">
                     <div className="text-6xl font-semibold tracking-tight md:text-8xl">
                       {formatNumber(currentPoints)}
                     </div>
-                    <div className="pb-2 text-lg text-slate-500">pts</div>
+                    <div className="pb-2 text-lg text-[var(--tf-muted)]">pts</div>
                   </div>
-                  <div className="mt-3 max-w-xl text-base leading-7 text-slate-600">
+                  <div className="mt-3 max-w-xl text-base leading-7 text-[var(--tf-muted)]">
                     {heroSubtitle}
                   </div>
                 </div>
@@ -431,42 +704,24 @@ export default function WTProgressAppleRedesign() {
 
                 <ProgressRow
                   label="Season completion"
-                  value={`${formatNumber(currentPoints)} / 2,400`}
-                  progress={fullCompletionPct}
-                  footerLeft="Starting line"
-                  footerRight={`Overall ${Math.round(fullCompletionPct)}%`}
+                  value={`${formatNumber(seasonDaysRemaining)} days left`}
+                  progress={seasonElapsedPct}
+                  footerLeft={`${formatNumber(elapsedSeasonDays)} days elapsed`}
+                  footerRight={`${Math.round(seasonElapsedPct)}% complete`}
                   large
                   indicatorClassName="bg-slate-900"
                 />
+
+                <ProgressRow
+                  label="Goal rank completion"
+                  value={`${formatNumber(pointsNeeded)} pts left`}
+                  progress={fullCompletionPct}
+                  footerLeft={`${formatNumber(currentPoints)} / 2,400 pts`}
+                  footerRight={`${Math.round(fullCompletionPct)}% complete`}
+                  indicatorClassName={tierAccent[tier as keyof typeof tierAccent]}
+                />
               </div>
 
-              <div className="grid gap-3 md:grid-cols-3">
-                <SummaryBlock
-                  label="Daily pace"
-                  value={formatNumber(dailyPointsNeeded)}
-                  helper={
-                    avgPerDay >= dailyPointsNeeded
-                      ? `Averaging ${avgPerDay.toFixed(1)}/day`
-                      : `${formatNumber(remainingToday)} left today`
-                  }
-                />
-                <SummaryBlock
-                  label="Next unlock"
-                  value={nextRank?.short ?? "E1"}
-                  helper={winsAwayLabel}
-                />
-                <SummaryBlock
-                  label="Projected finish"
-                  value={projectedCompletionDate ? formatDate(projectedCompletionDate) : "Waiting"}
-                  helper={
-                    projectedCompletionDate
-                      ? projectedCompletionDate <= SEASON_END
-                        ? "Before season end"
-                        : "Past season end"
-                      : "Log points to forecast"
-                  }
-                />
-              </div>
             </div>
           </motion.section>
 
@@ -474,12 +729,22 @@ export default function WTProgressAppleRedesign() {
             initial={{ opacity: 0, y: 16 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.08, duration: 0.35 }}
-            className="rounded-[2.25rem] border border-slate-900/10 bg-slate-950 p-6 text-white shadow-[0_24px_70px_rgba(15,23,42,0.24)] md:p-8"
+            className={cn(
+              "rounded-[2.25rem] p-6 md:p-8",
+              isOriginalStyle
+                ? "border border-white/70 bg-white/80 text-slate-900 shadow-[0_20px_60px_rgba(15,23,42,0.08)] backdrop-blur-xl"
+                : "tf-panel text-white"
+            )}
           >
             <div className="flex items-start justify-between gap-4">
               <div>
-                <div className="text-sm font-semibold uppercase tracking-[0.22em] text-slate-400">
-                  Today's focus
+                <div
+                  className={cn(
+                    "text-sm font-semibold uppercase tracking-[0.22em]",
+                    isOriginalStyle ? "text-slate-500" : "text-slate-400"
+                  )}
+                >
+                  Mission control
                 </div>
                 <h2 className="mt-3 text-3xl font-semibold tracking-tight">
                   {currentPoints === 0
@@ -494,22 +759,43 @@ export default function WTProgressAppleRedesign() {
                 className={cn(
                   "rounded-full px-3 py-1 text-sm font-medium",
                   isOnPace
-                    ? "bg-emerald-400/15 text-emerald-200"
-                    : "bg-amber-400/15 text-amber-200"
+                    ? isOriginalStyle
+                      ? "bg-emerald-100 text-emerald-700"
+                      : "bg-emerald-400/15 text-emerald-200"
+                    : isOriginalStyle
+                      ? "bg-amber-100 text-amber-700"
+                      : "bg-amber-400/15 text-amber-200"
                 )}
               >
                 {isOnPace ? "On pace" : "Needs attention"}
               </div>
             </div>
 
-            <div className="mt-6 rounded-[1.75rem] border border-white/10 bg-white/5 p-5">
-              <div className="text-sm text-slate-300">
+              <div
+                className={cn(
+                  "mt-6 rounded-[1.75rem] border p-5",
+                  isOriginalStyle
+                    ? "border-slate-200 bg-slate-50/90"
+                    : "border-white/10 bg-white/4"
+                )}
+              >
+                <div
+                  className={cn(
+                    "text-sm",
+                    isOriginalStyle ? "text-slate-500" : "text-[var(--tf-muted)]"
+                  )}
+                >
                 {remainingToday === 0 ? "Today's pace target" : "Points left today"}
               </div>
               <div className="mt-3 text-5xl font-semibold tracking-tight">
                 {remainingToday === 0 ? "Done" : formatNumber(remainingToday)}
               </div>
-              <p className="mt-3 max-w-sm text-sm leading-6 text-slate-300">
+              <p
+                className={cn(
+                  "mt-3 max-w-sm text-sm leading-6",
+                  isOriginalStyle ? "text-slate-600" : "text-[var(--tf-muted)]"
+                )}
+              >
                 {remainingToday === 0
                   ? "You already banked enough points today to match your current season pace."
                   : `Earn ${formatNumber(remainingToday)} more points today to keep this pace sustainable.`}
@@ -538,13 +824,9 @@ export default function WTProgressAppleRedesign() {
               <div className="mt-6 space-y-4">
                 <FocusRow label="Earned today" value={`+${formatNumber(todayEarned)}`} />
                 <FocusRow
-                  label="Season pace"
-                  value={paceGapLabel}
-                  valueClassName={isOnPace ? "text-emerald-200" : "text-amber-200"}
-                />
-                <FocusRow
-                  label="Projected finish"
-                  value={projectedCompletionDate ? formatDate(projectedCompletionDate) : "Waiting"}
+                  label="Averaging points per day"
+                  value={`${avgPerDay.toFixed(1)} pts/day`}
+                  valueClassName={isOnPace ? "text-emerald-700" : "text-amber-700"}
                 />
               </div>
             )}
@@ -555,50 +837,70 @@ export default function WTProgressAppleRedesign() {
           initial={{ opacity: 0, y: 16 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.12, duration: 0.35 }}
-          className="mt-10 rounded-[2.25rem] border border-white/70 bg-white/80 p-6 shadow-[0_20px_60px_rgba(15,23,42,0.08)] backdrop-blur-xl md:p-8"
+          className={cn(
+            "mt-8 rounded-[2.25rem] p-6 md:p-8",
+            isOriginalStyle
+              ? "border border-white/70 bg-white/80 shadow-[0_20px_60px_rgba(15,23,42,0.08)] backdrop-blur-xl"
+              : "tf-panel"
+          )}
         >
           <div className="mb-8 flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
             <div>
-              <div className="text-sm font-semibold uppercase tracking-[0.22em] text-slate-400">
-                Primary action
+              <div
+                className={cn(
+                  "text-sm font-semibold uppercase tracking-[0.22em]",
+                  isOriginalStyle ? "text-slate-400" : "text-slate-400"
+                )}
+              >
+                Action station
               </div>
               <h2 className="mt-2 text-3xl font-semibold tracking-tight">
                 Log progress
               </h2>
-              <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-500">
+              <p className="mt-2 text-sm leading-6 text-[var(--tf-muted)] lg:max-w-none lg:whitespace-nowrap">
                 Quick add after each match or save an exact total when you need
                 to sync the tracker with your in-game number.
               </p>
             </div>
 
-            <div className="rounded-full border border-slate-200 bg-slate-50 px-4 py-2 text-sm text-slate-600">
+            <div className="tf-meta-pill rounded-full px-4 py-2 text-sm text-[var(--tf-cream)]">
               {activeMode.helper}
             </div>
           </div>
 
           <div className="grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
-            <div className="rounded-[1.9rem] border border-slate-200/80 bg-slate-50/90 p-5">
-              <div className="mb-5 flex flex-wrap gap-2 rounded-[1.4rem] bg-white p-1.5 shadow-sm ring-1 ring-slate-200/70">
+            <div
+              className={cn(
+                "rounded-[1.9rem] p-5",
+                isOriginalStyle
+                  ? "border border-slate-200/80 bg-slate-50/90"
+                  : "tf-panel tf-panel-soft"
+              )}
+            >
+              <div
+                className={cn(
+                  "mb-5 grid grid-cols-3 gap-2 rounded-[1.4rem] p-1.5",
+                  isOriginalStyle
+                    ? "bg-white shadow-sm ring-1 ring-slate-200/70"
+                    : "bg-white/4 ring-1 ring-white/8"
+                )}
+              >
                 {matchModes.map((mode) => (
                   <button
                     key={mode.id}
                     onClick={() => handleMatchModeChange(mode.id)}
                     className={cn(
-                      "rounded-[1.1rem] px-4 py-3 text-left text-sm font-medium transition",
+                      "w-full rounded-[1.1rem] px-4 py-3 text-center text-sm font-medium transition",
                       matchMode === mode.id
-                        ? "bg-slate-900 text-white shadow-sm"
-                        : "text-slate-500 hover:bg-slate-100 hover:text-slate-900"
+                        ? isOriginalStyle
+                          ? "bg-slate-900 text-white shadow-sm"
+                          : "bg-[linear-gradient(90deg,#ff2d00,#ff5c1f)] text-white shadow-sm"
+                        : isOriginalStyle
+                          ? "text-slate-500 hover:bg-slate-100 hover:text-slate-900"
+                          : "text-[var(--tf-muted)] hover:bg-white/6 hover:text-[var(--tf-cream)]"
                     )}
                   >
                     <div>{mode.label}</div>
-                    <div
-                      className={cn(
-                        "mt-1 text-xs",
-                        matchMode === mode.id ? "text-white/70" : "text-slate-400"
-                      )}
-                    >
-                      {mode.helper}
-                    </div>
                   </button>
                 ))}
               </div>
@@ -608,10 +910,30 @@ export default function WTProgressAppleRedesign() {
                   <button
                     key={`${matchMode}-${button.label}`}
                     onClick={() => quickAdd(button.points)}
-                    className={`rounded-[1.5rem] border px-5 py-5 text-left transition hover:-translate-y-0.5 hover:shadow-md ${button.emphasis ? "border-slate-900 bg-slate-900 text-white" : "border-slate-200 bg-white text-slate-900"}`}
+                    className={cn(
+                      "rounded-[1.5rem] border px-5 py-5 text-left transition hover:-translate-y-0.5 hover:shadow-md",
+                      button.emphasis
+                        ? isOriginalStyle
+                          ? "border-slate-900 bg-slate-900 text-white"
+                          : "border-[#ff5c1f] bg-[linear-gradient(135deg,#ff2d00,#ff5c1f)] text-white"
+                        : isOriginalStyle
+                          ? "border-slate-200 bg-white text-slate-900"
+                          : "border-white/10 bg-white/4 text-[var(--tf-cream)]"
+                    )}
                   >
                     <div className="text-3xl font-semibold tracking-tight">+{button.points}</div>
-                    <div className={`mt-1 text-sm ${button.emphasis ? "text-white/80" : "text-slate-500"}`}>{button.label}</div>
+                    <div
+                      className={cn(
+                        "mt-1 text-sm",
+                        button.emphasis
+                          ? "text-white/80"
+                          : isOriginalStyle
+                            ? "text-slate-500"
+                            : "text-[var(--tf-muted)]"
+                      )}
+                    >
+                      {button.label}
+                    </div>
                   </button>
                 ))}
               </div>
@@ -623,13 +945,13 @@ export default function WTProgressAppleRedesign() {
                   max={100}
                   value={manualPoints}
                   onChange={(e) => handleManualPointsChange(e.target.value)}
-                  className="h-12 rounded-2xl border-slate-200 bg-white text-base"
+                  className="tf-input h-12 rounded-2xl text-base"
                   placeholder="Manual points"
                 />
-                <Button onClick={() => quickAdd(manualPoints)} className="h-12 rounded-2xl bg-slate-900 px-6 text-white hover:bg-slate-800">
+                <Button onClick={() => quickAdd(manualPoints)} className="tf-button-accent h-12 rounded-2xl px-6 hover:bg-slate-800">
                   Add custom
                 </Button>
-                <Button variant="outline" onClick={undoLastAdd} className="h-12 rounded-2xl border-slate-200 bg-white text-slate-700">
+                <Button variant="outline" onClick={undoLastAdd} className="tf-button-ghost h-12 rounded-2xl">
                   <RotateCcw className="mr-2 h-4 w-4" />
                   Undo last add
                 </Button>
@@ -637,11 +959,18 @@ export default function WTProgressAppleRedesign() {
             </div>
 
             <div className="space-y-4">
-              <div className="rounded-[1.9rem] border border-slate-200/80 bg-white p-5 shadow-sm">
-                <div className="text-sm font-medium text-slate-500">
+              <div
+                className={cn(
+                  "rounded-[1.9rem] p-5",
+                  isOriginalStyle
+                    ? "border border-slate-200/80 bg-white"
+                    : "tf-panel tf-panel-soft"
+                )}
+              >
+                <div className="text-sm font-medium text-[var(--tf-muted)]">
                   Set exact total
                 </div>
-                <p className="mt-2 text-sm leading-6 text-slate-500">
+                <p className="mt-2 text-sm leading-6 text-[var(--tf-muted)]">
                   {currentPoints === 0
                     ? "Use this if you already have progress and want to catch the tracker up instantly."
                     : "Use this if the quick add buttons ever drift from your in-game total."}
@@ -659,41 +988,15 @@ export default function WTProgressAppleRedesign() {
                         updateFromInput();
                       }
                     }}
-                    className="h-12 rounded-2xl border-slate-200 bg-white text-base"
+                    className="tf-input h-12 rounded-2xl text-base"
                     placeholder="Enter points"
                   />
-                  <Button onClick={updateFromInput} className="h-12 rounded-2xl bg-slate-900 px-6 text-white hover:bg-slate-800">
+                  <Button onClick={updateFromInput} className="tf-button-accent h-12 rounded-2xl px-6">
                     Save total
                   </Button>
                 </div>
               </div>
 
-              <div className="grid gap-3 sm:grid-cols-2">
-                <SummaryBlock
-                  label="Earned today"
-                  value={`+${formatNumber(todayEarned)}`}
-                  helper={
-                    remainingToday === 0
-                      ? "Today's pace target is covered"
-                      : `${formatNumber(remainingToday)} still needed`
-                  }
-                />
-                <SummaryBlock
-                  label="Next rank runway"
-                  value={nextRank ? `${formatNumber(pointsToNext)} pts` : "Goal hit"}
-                  helper={nextRank ? winsAwayLabel : "No more milestones left"}
-                />
-              </div>
-
-              <div className="rounded-[1.9rem] border border-dashed border-slate-300 bg-slate-50/70 p-5">
-                <div className="text-sm font-medium text-slate-600">
-                  Why both inputs?
-                </div>
-                <p className="mt-2 text-sm leading-6 text-slate-500">
-                  Quick add is fastest during a session. Exact total is best for
-                  correcting drift or jumping in mid-season.
-                </p>
-              </div>
             </div>
           </div>
         </motion.section>
@@ -702,20 +1005,22 @@ export default function WTProgressAppleRedesign() {
           initial={{ opacity: 0, y: 16 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.2, duration: 0.35 }}
-          className="border-t border-slate-200/60 py-10"
+          className={cn(
+            "py-10",
+            isOriginalStyle ? "border-t border-slate-200/80" : "border-t border-white/10"
+          )}
         >
           <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
             <div>
-              <h2 className="text-2xl font-semibold tracking-tight">Rank ladder</h2>
-              <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-500">
-                Open the full ladder when you want the long view. It stays tucked
-                away by default so the main screen keeps its focus.
+              <h2 className="text-2xl font-semibold tracking-tight text-[var(--tf-cream)]">Rank ladder</h2>
+              <p className="mt-2 max-w-2xl text-sm leading-6 text-[var(--tf-muted)]">
+                Open the full ladder when you want the long view.
               </p>
             </div>
             <Button
               variant="outline"
               onClick={() => setShowLadder((prev) => !prev)}
-              className="h-11 rounded-full border-slate-200 bg-white px-4 text-slate-700 hover:bg-slate-50"
+              className="tf-button-ghost h-11 rounded-full px-4"
             >
               {showLadder ? "Hide ladder" : "Show ladder"}
               <ChevronDown
@@ -727,15 +1032,15 @@ export default function WTProgressAppleRedesign() {
             </Button>
           </div>
 
-          <div className="mt-4 flex flex-wrap gap-3 text-sm text-slate-500">
-            <div className="rounded-full border border-slate-200 bg-white/80 px-4 py-2">
+          <div className="mt-4 flex flex-wrap gap-3 text-sm text-[var(--tf-muted)]">
+            <div className="tf-meta-pill rounded-full px-4 py-2">
               <CalendarDays className="mr-2 inline h-4 w-4" />
               {seasonDaysRemaining} days remaining
             </div>
-            <div className="rounded-full border border-slate-200 bg-white/80 px-4 py-2">
+            <div className="tf-meta-pill rounded-full px-4 py-2">
               {currentRank?.name ?? "Unranked"} right now
             </div>
-            <div className="rounded-full border border-slate-200 bg-white/80 px-4 py-2">
+            <div className="tf-meta-pill rounded-full px-4 py-2">
               {formatNumber(pointsNeeded)} pts to goal
             </div>
           </div>
@@ -749,7 +1054,7 @@ export default function WTProgressAppleRedesign() {
                 transition={{ duration: 0.25 }}
                 className="overflow-hidden"
               >
-                <div className="mt-6 overflow-hidden rounded-[2rem] border border-slate-200/80 bg-white/85 shadow-[0_20px_60px_rgba(15,23,42,0.06)] backdrop-blur-xl">
+                <div className="tf-panel rounded-[2rem]">
                   {RANKS.map((rank, index) => {
                     const status =
                       currentRank?.name === rank.name
@@ -761,12 +1066,16 @@ export default function WTProgressAppleRedesign() {
                     return (
                       <div
                         key={rank.name}
-                        className={`flex items-center justify-between gap-4 px-5 py-4 ${index !== 0 ? "border-t border-slate-100" : ""} ${
+                        className={`flex items-center justify-between gap-4 px-5 py-4 ${index !== 0 ? isOriginalStyle ? "border-t border-slate-100" : "border-t border-white/8" : ""} ${
                           status === "passed"
-                            ? "bg-emerald-50/70"
+                            ? isOriginalStyle
+                              ? "bg-emerald-50/70"
+                              : "bg-emerald-400/12"
                             : status === "current"
                               ? tierChip[rank.tier as keyof typeof tierChip]
-                              : "bg-white/70"
+                              : isOriginalStyle
+                                ? "bg-white/70"
+                                : "bg-white/4"
                         }`}
                       >
                         <div className="flex min-w-0 items-center gap-4">
@@ -775,8 +1084,20 @@ export default function WTProgressAppleRedesign() {
                             {rank.short}
                           </div>
                           <div className="min-w-0">
-                            <div className="truncate text-base font-semibold text-slate-900">{rank.name}</div>
-                            <div className="mt-0.5 text-sm text-slate-500">
+                            <div
+                              className={cn(
+                                "truncate text-base font-semibold",
+                                isOriginalStyle ? "text-slate-900" : "text-[var(--tf-cream)]"
+                              )}
+                            >
+                              {rank.name}
+                            </div>
+                            <div
+                              className={cn(
+                                "mt-0.5 text-sm",
+                                isOriginalStyle ? "text-slate-500" : "text-[var(--tf-muted)]"
+                              )}
+                            >
                               {status === "passed"
                                 ? "Reached"
                                 : status === "current"
@@ -788,10 +1109,29 @@ export default function WTProgressAppleRedesign() {
 
                         <div className="flex items-center gap-3 text-right">
                           <div>
-                            <div className="text-lg font-semibold text-slate-900">{formatNumber(rank.points)}</div>
-                            <div className="text-xs uppercase tracking-[0.18em] text-slate-400">Points</div>
+                            <div
+                              className={cn(
+                                "text-lg font-semibold",
+                                isOriginalStyle ? "text-slate-900" : "text-[var(--tf-cream)]"
+                              )}
+                            >
+                              {formatNumber(rank.points)}
+                            </div>
+                            <div
+                              className={cn(
+                                "text-xs uppercase tracking-[0.18em]",
+                                isOriginalStyle ? "text-slate-400" : "text-[var(--tf-muted)]"
+                              )}
+                            >
+                              Points
+                            </div>
                           </div>
-                          <ChevronRight className="h-4 w-4 text-slate-300" />
+                          <ChevronRight
+                            className={cn(
+                              "h-4 w-4",
+                              isOriginalStyle ? "text-slate-300" : "text-white/22"
+                            )}
+                          />
                         </div>
                       </div>
                     );
@@ -801,6 +1141,10 @@ export default function WTProgressAppleRedesign() {
             ) : null}
           </AnimatePresence>
         </motion.section>
+          </>
+        ) : (
+          <StatisticsBadgeProgressionPage styleMode={visualStyleMode} />
+        )}
       </div>
     </div>
   );
@@ -809,7 +1153,7 @@ export default function WTProgressAppleRedesign() {
 function InlineMeta({
   label,
   value,
-  valueClassName = "text-slate-900",
+  valueClassName = "text-[var(--tf-cream)]",
   className,
 }: {
   label: string;
@@ -820,11 +1164,11 @@ function InlineMeta({
   return (
     <div
       className={cn(
-        "inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white/80 px-4 py-2",
+        "tf-meta-pill inline-flex items-center gap-2 rounded-full px-4 py-2",
         className
       )}
     >
-      <span className="text-slate-400">{label}</span>
+      <span className="text-[var(--tf-muted)]">{label}</span>
       <span className={cn("font-medium", valueClassName)}>{value}</span>
     </div>
   );
@@ -849,16 +1193,16 @@ function ProgressRow({
 }) {
   return (
     <div>
-      <div className="mb-2 flex items-center justify-between gap-3 text-sm text-slate-500">
+      <div className="mb-2 flex items-center justify-between gap-3 text-sm text-[var(--tf-muted)]">
         <span>{label}</span>
-        <span className="font-medium text-slate-700">{value}</span>
+        <span className="font-medium text-[var(--tf-cream)]">{value}</span>
       </div>
       <Progress
         value={progress}
         indicatorClassName={indicatorClassName}
-        className={`${large ? "h-4" : "h-3"} rounded-full bg-white/80 shadow-inner`}
+        className={cn("tf-progress-track rounded-full", large ? "h-4" : "h-3")}
       />
-      <div className="mt-2 flex items-center justify-between text-xs text-slate-500">
+      <div className="mt-2 flex items-center justify-between text-xs text-[var(--tf-muted)]">
         <span>{footerLeft}</span>
         <span>{footerRight}</span>
       </div>
@@ -866,38 +1210,18 @@ function ProgressRow({
   );
 }
 
-function SummaryBlock({
+function FocusRow({
   label,
   value,
-  helper,
   valueClassName = "text-slate-900",
 }: {
   label: string;
   value: string;
-  helper: string;
   valueClassName?: string;
 }) {
   return (
-    <div className="rounded-[1.6rem] border border-slate-200/80 bg-white/85 p-5 shadow-sm">
-      <div className="text-sm font-medium text-slate-500">{label}</div>
-      <div className={`mt-3 text-3xl font-semibold tracking-tight ${valueClassName}`}>{value}</div>
-      <div className="mt-2 text-sm leading-6 text-slate-500">{helper}</div>
-    </div>
-  );
-}
-
-function FocusRow({
-  label,
-  value,
-  valueClassName = "text-white",
-}: {
-  label: string;
-  value: string;
-  valueClassName?: string;
-}) {
-  return (
-    <div className="flex items-center justify-between gap-4 rounded-[1.35rem] border border-white/10 bg-white/5 px-4 py-3">
-      <span className="text-sm text-slate-300">{label}</span>
+    <div className="flex items-center justify-between gap-4 rounded-[1.35rem] border border-slate-200 bg-slate-50/90 px-4 py-3">
+      <span className="text-sm text-slate-500">{label}</span>
       <span className={cn("text-sm font-medium", valueClassName)}>{value}</span>
     </div>
   );
@@ -913,13 +1237,13 @@ function OnboardingStep({
   body: string;
 }) {
   return (
-    <div className="flex items-start gap-3 rounded-[1.4rem] border border-white/10 bg-white/5 px-4 py-4">
-      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white/10 text-sm font-semibold text-white">
+    <div className="flex items-start gap-3 rounded-[1.4rem] border border-slate-200 bg-slate-50/90 px-4 py-4">
+      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-slate-500 text-sm font-semibold text-white">
         {number}
       </div>
       <div>
-        <div className="text-sm font-medium text-white">{title}</div>
-        <div className="mt-1 text-sm leading-6 text-slate-300">{body}</div>
+        <div className="text-sm font-medium text-slate-900">{title}</div>
+        <div className="mt-1 text-sm leading-6 text-slate-600">{body}</div>
       </div>
     </div>
   );
