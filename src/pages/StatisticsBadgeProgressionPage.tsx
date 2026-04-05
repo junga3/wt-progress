@@ -3,7 +3,6 @@ import { motion } from "framer-motion";
 import {
   CircleDollarSign,
   Crosshair,
-  Gem,
   HeartPulse,
   Trophy,
 } from "lucide-react";
@@ -19,6 +18,10 @@ type StatisticsBadgeProgressionPageProps = {
 };
 
 const BADGE_STORAGE_KEY = "wt-statistics-badge-progression-state";
+const BADGE_ART = import.meta.glob("../assets/stats/*.png", {
+  eager: true,
+  import: "default",
+}) as Record<string, string>;
 
 const BADGE_TIERS: BadgeTier[] = [
   "Bronze",
@@ -90,6 +93,13 @@ const BADGE_TIER_STYLES: Record<
   },
 };
 
+const BADGE_ART_SERIES: Record<BadgeStatId, string> = {
+  wins: "REGULAR_FIXTURE",
+  eliminations: "EFFICIENT_ELIMINATOR",
+  revives: "VIRTUAL_LIFESAVER",
+  cash: "CASH_FLOW_MANAGER",
+};
+
 const NUMBER_FORMATTER = new Intl.NumberFormat("en-US");
 const CURRENCY_FORMATTER = new Intl.NumberFormat("en-US", {
   style: "currency",
@@ -99,40 +109,40 @@ const CURRENCY_FORMATTER = new Intl.NumberFormat("en-US", {
 
 const BADGE_STATS = [
   {
+    id: "wins" as const,
+    gameLabel: "WINS",
+    label: "Total wins",
+    shortLabel: "Wins",
+    icon: Trophy,
+    placeholder: "0",
+    thresholds: [20, 50, 300, 1_000, 2_500, 5_000],
+  },
+  {
     id: "eliminations" as const,
+    gameLabel: "ELIMINATIONS",
     label: "Total eliminations",
     shortLabel: "Eliminations",
     icon: Crosshair,
-    description: "Track your lifetime knockouts and see when the next badge skin unlocks.",
     placeholder: "0",
     thresholds: [100, 750, 3_000, 10_000, 25_000, 50_000],
   },
   {
     id: "revives" as const,
+    gameLabel: "REVIVES",
     label: "Total revives",
     shortLabel: "Revives",
     icon: HeartPulse,
-    description: "Keep an eye on support milestones and how close you are to your next tier.",
     placeholder: "0",
     thresholds: [25, 150, 750, 2_500, 5_000, 10_000],
   },
   {
     id: "cash" as const,
+    gameLabel: "CASH",
     label: "Total cash",
     shortLabel: "Cash",
     icon: CircleDollarSign,
-    description: "Enter your lifetime cashout total to see how far the economy badge line goes.",
     placeholder: "0",
     thresholds: [1_000_000, 5_000_000, 15_000_000, 50_000_000, 100_000_000, 250_000_000],
-  },
-  {
-    id: "wins" as const,
-    label: "Total wins",
-    shortLabel: "Wins",
-    icon: Trophy,
-    description: "See your victory badge progression with the same tier ladder used in game.",
-    placeholder: "0",
-    thresholds: [20, 50, 300, 1_000, 2_500, 5_000],
   },
 ];
 
@@ -187,6 +197,18 @@ function formatBadgeValue(id: BadgeStatId, value: number) {
   return id === "cash" ? CURRENCY_FORMATTER.format(value) : NUMBER_FORMATTER.format(value);
 }
 
+function formatGameInputValue(value: string) {
+  if (!value) return "";
+  return NUMBER_FORMATTER.format(parseBadgeValue(value));
+}
+
+function getBadgeArt(statId: BadgeStatId, tier: BadgeTier | "Unranked") {
+  if (tier === "Unranked") return null;
+
+  const series = BADGE_ART_SERIES[statId];
+  return BADGE_ART[`../assets/stats/Common_${series}-${tier}.png`] ?? null;
+}
+
 function getTierProgress(value: number, thresholds: number[]) {
   const currentTierIndex = thresholds.reduce(
     (highestIndex, threshold, index) => (value >= threshold ? index : highestIndex),
@@ -221,6 +243,7 @@ export function StatisticsBadgeProgressionPage({
 }: StatisticsBadgeProgressionPageProps) {
   const [inputs, setInputs] = useState<StoredBadgeInputs>(() => getSavedBadgeInputs());
   const isOriginalStyle = styleMode === "original";
+  const bodyTextClass = isOriginalStyle ? "text-slate-600" : "text-[var(--tf-muted)]";
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -244,135 +267,75 @@ export function StatisticsBadgeProgressionPage({
     [inputs]
   );
 
-  const unlockedCount = summaries.filter((summary) => summary.progress.currentTier).length;
-  const closestUpgrade = summaries
-    .filter((summary) => summary.progress.nextTier)
-    .sort((left, right) => left.progress.remaining - right.progress.remaining)[0];
-
   return (
     <>
       <motion.section
         initial={{ opacity: 0, y: 16 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.04, duration: 0.35 }}
-        className="mt-8 grid gap-6 xl:grid-cols-[1.15fr_0.85fr]"
+        className={cn(
+          "mt-8 rounded-[2.25rem] p-6 md:p-8",
+          isOriginalStyle
+            ? "border border-white/70 bg-white/85 shadow-[0_20px_60px_rgba(15,23,42,0.08)] backdrop-blur-xl"
+            : "tf-panel"
+        )}
       >
-        <div
-          className={cn(
-            "rounded-[2.25rem] p-6 md:p-8",
-            isOriginalStyle
-              ? "border border-white/70 bg-white/80 shadow-[0_20px_60px_rgba(15,23,42,0.08)] backdrop-blur-xl"
-              : "tf-panel tf-panel-accent text-white"
-          )}
-        >
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+          <div className="max-w-2xl">
+            <div className="tf-kicker">Input from game</div>
+            <h2 className="mt-3 text-3xl font-semibold tracking-tight text-[var(--tf-cream)]">
+              Enter the totals from your player card
+            </h2>
+            <p className={cn("mt-3 text-sm leading-6", bodyTextClass)}>
+              Type the lifetime totals you see in game. The badge cards below
+              update instantly and save automatically in this browser.
+            </p>
+          </div>
+
           <div
             className={cn(
-              "inline-flex items-center gap-2 rounded-full px-4 py-2 text-xs font-semibold uppercase tracking-[0.22em]",
+              "rounded-full border px-4 py-2 text-sm font-medium",
               isOriginalStyle
-                ? "border border-slate-200 bg-slate-50 text-slate-500"
-                : "border border-white/10 bg-white/5 text-[var(--tf-muted)]"
+                ? "border-slate-200 bg-slate-50 text-slate-500"
+                : "border-white/10 bg-white/4 text-[var(--tf-muted)]"
             )}
           >
-            <Gem className={cn("h-4 w-4", isOriginalStyle ? "text-slate-900" : "text-[#ff5c1f]")} />
-            Statistics badge progression
-          </div>
-          <div className="tf-kicker mt-6">Player card progression</div>
-          <h2 className="tf-display mt-3 text-5xl md:text-6xl">
-            See every lifetime badge tier in one place.
-          </h2>
-          <p
-            className={cn(
-              "mt-4 max-w-2xl text-base leading-7",
-              isOriginalStyle ? "text-slate-600" : "text-[var(--tf-muted)]"
-            )}
-          >
-            This page is designed as a clean badge tracker for the statistics
-            section only. Enter your totals for eliminations, revives, cash, and
-            wins to preview the current badge and the next milestone instantly.
-          </p>
-
-          <div className="mt-8 grid gap-3 sm:grid-cols-3">
-            <BadgeHeroStat
-              originalStyle={isOriginalStyle}
-              label="Tracked badges"
-              value="4"
-              helper="Elims, revives, cash, wins"
-            />
-            <BadgeHeroStat
-              originalStyle={isOriginalStyle}
-              label="Badge tiers"
-              value="6"
-              helper="Bronze through Amethyst"
-            />
-            <BadgeHeroStat
-              originalStyle={isOriginalStyle}
-              label="Closest unlock"
-              value={closestUpgrade?.progress.nextTier ?? "Ready"}
-              helper={
-                closestUpgrade
-                  ? `${formatBadgeValue(closestUpgrade.id, closestUpgrade.progress.remaining)} left`
-                  : "Every top tier unlocked"
-              }
-            />
+            Saved automatically
           </div>
         </div>
 
-        <div
-          className={cn(
-            "rounded-[2.25rem] p-6 md:p-8",
-            isOriginalStyle
-              ? "border border-white/70 bg-white/80 shadow-[0_20px_60px_rgba(15,23,42,0.08)] backdrop-blur-xl"
-              : "tf-panel tf-panel-soft"
-          )}
-        >
-          <div className="tf-kicker">
-            Layout direction
-          </div>
-          <h3 className="mt-3 text-3xl font-semibold tracking-tight text-[var(--tf-cream)]">
-            Four cards, one rhythm
-          </h3>
-          <p
-            className={cn(
-              "mt-3 text-sm leading-6",
-              isOriginalStyle ? "text-slate-500" : "text-[var(--tf-muted)]"
-            )}
-          >
-            The mockup keeps every stat in the same card pattern so the page feels
-            consistent. A player should be able to scan the current tier, next
-            milestone, and progress bar without hunting.
-          </p>
-
-          <div className="mt-6 space-y-3">
-            <BadgeGuidanceRow
-              originalStyle={isOriginalStyle}
-              label="Current coverage"
-              value={`${unlockedCount} / 4 categories unlocked`}
-            />
-            <BadgeGuidanceRow
-              originalStyle={isOriginalStyle}
-              label="Input style"
-              value="Large numeric fields with formatted totals"
-            />
-            <BadgeGuidanceRow
-              originalStyle={isOriginalStyle}
-              label="Progress logic"
-              value="Badge tier + next threshold + remaining amount"
-            />
-          </div>
-
-          <div className="mt-6 flex flex-wrap gap-2">
-            {BADGE_TIERS.map((tier) => (
-                  <span
-                key={tier}
-                className={cn(
-                  "rounded-full border px-3 py-1.5 text-xs font-medium",
-                  BADGE_TIER_STYLES[tier].chip
-                )}
+        <div className="mt-6 overflow-hidden rounded-[1.9rem] border border-slate-900/90 bg-[#1d1f25] shadow-[0_20px_50px_rgba(15,23,42,0.18)]">
+          {BADGE_STATS.map((stat, index) => (
+            <div
+              key={`game-input-${stat.id}`}
+              className={cn(
+                "grid items-center gap-4 px-4 py-4 md:grid-cols-[minmax(0,1fr)_minmax(180px,240px)] md:px-6",
+                index !== 0 ? "border-t border-white/10" : ""
+              )}
+            >
+              <label
+                htmlFor={`game-input-${stat.id}`}
+                className="text-2xl font-semibold uppercase italic tracking-[0.02em] text-white"
               >
-                {tier}
-              </span>
-            ))}
-          </div>
+                {stat.gameLabel}
+              </label>
+
+              <Input
+                id={`game-input-${stat.id}`}
+                type="text"
+                inputMode="numeric"
+                value={formatGameInputValue(inputs[stat.id])}
+                onChange={(event) =>
+                  setInputs((prev) => ({
+                    ...prev,
+                    [stat.id]: sanitizeNumericInput(event.target.value),
+                  }))
+                }
+                className="h-auto border-none bg-transparent px-0 py-0 text-right text-3xl font-semibold tracking-tight text-white shadow-none focus-visible:ring-0"
+                placeholder={stat.placeholder}
+              />
+            </div>
+          ))}
         </div>
       </motion.section>
 
@@ -380,7 +343,7 @@ export function StatisticsBadgeProgressionPage({
         initial={{ opacity: 0, y: 16 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.08, duration: 0.35 }}
-        className="mt-10 grid gap-5 lg:grid-cols-2"
+        className="mt-8 grid gap-5 lg:grid-cols-2"
       >
         {summaries.map((summary, index) => {
           const Icon = summary.icon;
@@ -388,6 +351,7 @@ export function StatisticsBadgeProgressionPage({
           const activeTierStyles = BADGE_TIER_STYLES[summary.activeTier];
           const currentTierStyles = BADGE_TIER_STYLES[currentTier];
           const nextTierStyles = BADGE_TIER_STYLES[summary.progress.nextTier ?? summary.activeTier];
+          const badgeArt = getBadgeArt(summary.id, currentTier);
 
           return (
             <motion.article
@@ -437,47 +401,24 @@ export function StatisticsBadgeProgressionPage({
                 </div>
               </div>
 
-              <p
-                className={cn(
-                  "mt-4 text-sm leading-6",
-                  isOriginalStyle ? "text-slate-500" : "text-[var(--tf-muted)]"
-                )}
-              >
-                {summary.description}
-              </p>
-
-              <div className="mt-5">
-                <label
-                  className={cn(
-                    "text-sm font-medium",
-                    isOriginalStyle ? "text-slate-500" : "text-[var(--tf-muted)]"
-                  )}
-                  htmlFor={summary.id}
-                >
-                  Enter your lifetime total
-                </label>
-                <Input
-                  id={summary.id}
-                  type="text"
-                  inputMode="numeric"
-                  value={inputs[summary.id]}
-                  onChange={(event) =>
-                    setInputs((prev) => ({
-                      ...prev,
-                      [summary.id]: sanitizeNumericInput(event.target.value),
-                    }))
-                  }
-                  className="tf-input mt-2 h-13 rounded-[1.4rem] text-lg"
-                  placeholder={summary.placeholder}
+              <div className="mt-5 grid gap-3 sm:grid-cols-2">
+                <StatMetaCard
+                  label="Entered total"
+                  value={formatBadgeValue(summary.id, summary.value)}
+                  isOriginalStyle={isOriginalStyle}
                 />
-                <div
-                  className={cn(
-                    "mt-2 text-sm",
-                    isOriginalStyle ? "text-slate-500" : "text-[var(--tf-muted)]"
-                  )}
-                >
-                  Formatted total: {formatBadgeValue(summary.id, summary.value)}
-                </div>
+                <StatMetaCard
+                  label="Next unlock"
+                  value={
+                    summary.progress.nextTier
+                      ? `${summary.progress.nextTier} in ${formatBadgeValue(
+                          summary.id,
+                          summary.progress.remaining
+                        )}`
+                      : "Top tier reached"
+                  }
+                  isOriginalStyle={isOriginalStyle}
+                />
               </div>
 
               <div
@@ -501,21 +442,24 @@ export function StatisticsBadgeProgressionPage({
                   </div>
 
                   <div className="flex flex-col items-center">
-                    <div
-                      className={cn(
-                        "grid h-24 w-24 place-items-center rounded-[1.75rem] border border-white/10 bg-black/25 shadow-sm",
-                        activeTierStyles.text
-                      )}
-                    >
-                      <div className="text-center">
-                        <div className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
-                          Badge
-                        </div>
-                        <div className="mt-1 text-xl font-semibold">
-                          {currentTier === "Unranked" ? "--" : currentTier.slice(0, 2)}
+                    {badgeArt ? (
+                      <img
+                        src={badgeArt}
+                        alt={`${summary.label} ${currentTier} badge`}
+                        className="h-26 w-26 object-contain drop-shadow-[0_14px_28px_rgba(15,23,42,0.18)]"
+                      />
+                    ) : (
+                      <div className="grid h-24 w-24 place-items-center rounded-[1.75rem] border border-dashed border-slate-300 bg-white/65 text-center shadow-sm">
+                        <div>
+                          <div className="text-[0.65rem] font-semibold uppercase tracking-[0.18em] text-slate-500">
+                            Badge
+                          </div>
+                          <div className="mt-1 text-sm font-semibold text-slate-700">
+                            Locked
+                          </div>
                         </div>
                       </div>
-                    </div>
+                    )}
                   </div>
                 </div>
 
@@ -576,56 +520,40 @@ export function StatisticsBadgeProgressionPage({
   );
 }
 
-function BadgeHeroStat({
-  originalStyle,
+function StatMetaCard({
   label,
   value,
-  helper,
+  isOriginalStyle,
 }: {
-  originalStyle: boolean;
   label: string;
   value: string;
-  helper: string;
+  isOriginalStyle: boolean;
 }) {
   return (
     <div
       className={cn(
-        "rounded-[1.5rem] border p-4",
-        originalStyle ? "border-slate-200 bg-slate-50/90" : "border-white/10 bg-white/4"
+        "rounded-[1.35rem] border px-4 py-3",
+        isOriginalStyle
+          ? "border-slate-200 bg-slate-50/90"
+          : "border-white/10 bg-white/4"
       )}
     >
-      <div className={cn("text-sm", originalStyle ? "text-slate-500" : "text-[var(--tf-muted)]")}>{label}</div>
-      <div className="mt-2 text-3xl font-semibold tracking-tight text-[var(--tf-cream)]">{value}</div>
       <div
         className={cn(
-          "mt-2 text-sm leading-6",
-          originalStyle ? "text-slate-500" : "text-[var(--tf-muted)]"
+          "text-xs font-semibold uppercase tracking-[0.18em]",
+          isOriginalStyle ? "text-slate-500" : "text-[var(--tf-muted)]"
         )}
       >
-        {helper}
+        {label}
       </div>
-    </div>
-  );
-}
-
-function BadgeGuidanceRow({
-  originalStyle,
-  label,
-  value,
-}: {
-  originalStyle: boolean;
-  label: string;
-  value: string;
-}) {
-  return (
-    <div
-      className={cn(
-        "flex items-center justify-between gap-4 rounded-[1.35rem] border px-4 py-3",
-        originalStyle ? "border-slate-200 bg-slate-50/90" : "border-white/10 bg-white/4"
-      )}
-    >
-      <span className={cn("text-sm", originalStyle ? "text-slate-500" : "text-[var(--tf-muted)]")}>{label}</span>
-      <span className="text-sm font-medium text-[var(--tf-cream)]">{value}</span>
+      <div
+        className={cn(
+          "mt-2 text-lg font-semibold tracking-tight",
+          isOriginalStyle ? "text-slate-900" : "text-[var(--tf-cream)]"
+        )}
+      >
+        {value}
+      </div>
     </div>
   );
 }

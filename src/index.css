@@ -282,14 +282,8 @@ html[data-style-mode="original"] {
 
   .tf-display {
     color: var(--tf-cream);
-    font-weight: 900;
-    letter-spacing: -0.05em;
-    line-height: 0.9;
-    text-transform: uppercase;
-  }
-
-  html[data-style-mode="original"] .tf-display {
     font-weight: 700;
+    letter-spacing: -0.05em;
     line-height: 1.02;
     text-transform: none;
   }
