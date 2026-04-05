@@ -3,6 +3,7 @@ import ReactDOM from "react-dom/client"
 import App from "./App"
 import "./index.css"
 
+const STYLE_MODE_STORAGE_KEY = "wt-progress-style-mode"
 const redirectTarget = new URLSearchParams(window.location.search).get("p")
 
 if (redirectTarget) {
@@ -14,8 +15,13 @@ if (redirectTarget) {
   window.history.replaceState(null, "", `${basePath}${nextPath}`)
 }
 
-document.documentElement.dataset.styleMode = "original"
-document.documentElement.style.colorScheme = "light"
+const initialStyleMode =
+  window.localStorage.getItem(STYLE_MODE_STORAGE_KEY) === "original"
+    ? "original"
+    : "rebuilt"
+
+document.documentElement.dataset.styleMode = initialStyleMode
+document.documentElement.style.colorScheme = initialStyleMode === "original" ? "light" : "dark"
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>

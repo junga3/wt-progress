@@ -1,19 +1,21 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import {
+  BadgeCheck,
   CalendarDays,
   ChevronDown,
   ChevronRight,
   Moon,
   RotateCcw,
   Medal,
-  Sparkles,
   Sun,
+  Ticket,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
 import { cn } from "@/lib/utils";
+import { BattlePassProgressionPage } from "@/pages/BattlePassProgressionPage";
 import { StatisticsBadgeProgressionPage } from "@/pages/StatisticsBadgeProgressionPage";
 
 const RANKS = [
@@ -46,6 +48,7 @@ const RANKS = [
 const TOTAL_POINTS = 2400;
 const STORAGE_KEY = "wt-progress-tracker-state";
 const STYLE_MODE_STORAGE_KEY = "wt-progress-style-mode";
+const SEASON_DAY_TIMER_OFFSET = -1;
 const SEASON_START = new Date("2026-03-26T00:00:00");
 
 function getTodayStamp() {
@@ -140,13 +143,14 @@ const tierChip = {
   Unranked: "border-slate-200 bg-slate-50/90",
 };
 
-type SiteId = "world-tour" | "statistics-badges";
+type SiteId = "world-tour" | "statistics-badges" | "battle-pass";
 type StyleMode = "rebuilt" | "original";
 const APP_BASE_PATH = import.meta.env.BASE_URL;
 
 const SITE_OPTIONS = [
   {
     id: "world-tour" as const,
+    icon: Medal,
     label: "World Tour progress companion",
     path: "world-tour-progress",
     title: "Track the climb.\nKeep the momentum.",
@@ -156,12 +160,23 @@ const SITE_OPTIONS = [
   },
   {
     id: "statistics-badges" as const,
+    icon: BadgeCheck,
     label: "Statistics Badge Progression",
     path: "statistics-badge-progression",
-    title: "Statistics Badge Progression",
+    title: "See every lifetime badge tier in one place.",
     description:
-      "Enter your lifetime totals for eliminations, revives, cash, and wins to preview each badge tier and the next milestone in a cleaner card layout.",
-    preview: "Four statistic badge cards with tier progression",
+      "Track eliminations, revives, cash, and wins to see your current badge tier, next milestone, and progression at a glance.",
+    preview: "Player card badge tracking for four lifetime stats",
+  },
+  {
+    id: "battle-pass" as const,
+    icon: Ticket,
+    label: "Battle Pass Progression",
+    path: "battle-pass-progression",
+    title: "Track every level.\nSee the whole pass.",
+    description:
+      "Update your current Battle Pass level, follow the main track and bonus pages, and keep the bracket math in a cleaner level-first view.",
+    preview: "Battle Pass progress, level bands, and bonus tracking",
   },
 ];
 
@@ -188,6 +203,9 @@ function getRelativeAppPath(pathname: string) {
 
 function getSiteFromPathname(pathname: string): SiteId {
   const relativePath = getRelativeAppPath(pathname);
+  if (relativePath.includes("battle-pass-progression")) {
+    return "battle-pass";
+  }
   return relativePath.includes("statistics-badge-progression")
     ? "statistics-badges"
     : "world-tour";
@@ -201,7 +219,8 @@ function daysBetween(a: Date, b: Date) {
 function getDaysRemaining(endDate: Date) {
   const now = new Date();
   const oneDay = 1000 * 60 * 60 * 24;
-  return Math.max(0, Math.ceil((endDate.getTime() - now.getTime()) / oneDay));
+  const rawDays = Math.max(0, Math.ceil((endDate.getTime() - now.getTime()) / oneDay));
+  return Math.max(0, rawDays + SEASON_DAY_TIMER_OFFSET);
 }
 
 function getRankInfo(points: number) {
@@ -284,7 +303,9 @@ export default function WTProgressAppleRedesign() {
   const activeMode = matchModes.find((mode) => mode.id === matchMode) ?? matchModes[0];
   const activeSiteConfig =
     SITE_OPTIONS.find((site) => site.id === activeSite) ?? SITE_OPTIONS[0];
-  const visualStyleMode: StyleMode = "original";
+  const alternateSites = SITE_OPTIONS.filter((site) => site.id !== activeSite);
+  const ActiveSiteIcon = activeSiteConfig.icon;
+  const visualStyleMode: StyleMode = styleMode;
   const isOriginalStyle = visualStyleMode === "original";
 
   useEffect(() => {
@@ -343,8 +364,8 @@ export default function WTProgressAppleRedesign() {
 
     window.localStorage.setItem(STYLE_MODE_STORAGE_KEY, styleMode);
     document.documentElement.dataset.styleMode = visualStyleMode;
-    document.documentElement.style.colorScheme = "light";
-  }, [styleMode, visualStyleMode]);
+    document.documentElement.style.colorScheme = isOriginalStyle ? "light" : "dark";
+  }, [isOriginalStyle, styleMode, visualStyleMode]);
 
   function persistTrackerState(next: {
     currentPoints: number;
@@ -491,7 +512,9 @@ export default function WTProgressAppleRedesign() {
                   onClick={() => setIsSiteMenuOpen((prev) => !prev)}
                   className="tf-route-button inline-flex items-center gap-2 rounded-full px-4 py-2 text-xs font-semibold uppercase tracking-[0.22em] transition hover:border-white/20 hover:bg-white/10"
                 >
-                  <Sparkles className={cn("h-4 w-4", isOriginalStyle ? "text-slate-900" : "text-[#ff5c1f]")} />
+                  <ActiveSiteIcon
+                    className={cn("h-4 w-4", isOriginalStyle ? "text-slate-900" : "text-[#ff5c1f]")}
+                  />
                   {activeSiteConfig.label}
                   <ChevronDown
                     className={cn(
@@ -504,52 +527,47 @@ export default function WTProgressAppleRedesign() {
                 <AnimatePresence>
                   {isSiteMenuOpen ? (
                     <motion.div
-                      initial={{ opacity: 0, y: 8, scale: 0.98 }}
-                      animate={{ opacity: 1, y: 0, scale: 1 }}
-                      exit={{ opacity: 0, y: 8, scale: 0.98 }}
-                      transition={{ duration: 0.18 }}
-                      className={cn(
-                        "absolute left-0 top-[calc(100%+0.75rem)] z-30 w-80 rounded-[1.6rem] p-2",
+                    initial={{ opacity: 0, y: 8, scale: 0.98 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    exit={{ opacity: 0, y: 8, scale: 0.98 }}
+                    transition={{ duration: 0.18 }}
+                    className={cn(
+                        "absolute left-0 top-[calc(100%+0.75rem)] z-30 rounded-[1.6rem] p-2",
                         isOriginalStyle
                           ? "border border-white/70 bg-white/90 shadow-[0_24px_60px_rgba(15,23,42,0.12)] backdrop-blur-xl"
                           : "tf-panel tf-panel-soft"
                       )}
                     >
-                      {SITE_OPTIONS.map((site) => (
-                        <button
-                          key={site.id}
-                          type="button"
-                          onClick={() => {
-                            window.history.pushState(null, "", getSiteHref(site.path));
-                            setActiveSite(site.id);
-                            setIsSiteMenuOpen(false);
-                            window.scrollTo({ top: 0, behavior: "smooth" });
-                          }}
-                          className={cn(
-                            "tf-route-option flex w-full flex-col rounded-[1.2rem] px-4 py-3 text-left transition",
-                            activeSite === site.id
-                              ? isOriginalStyle
-                                ? "bg-slate-900 text-white"
-                                : "bg-[linear-gradient(90deg,#ff2d00,#ff5c1f)] text-white"
-                              : isOriginalStyle
-                                ? "text-slate-900 hover:bg-slate-100"
-                                : "text-[var(--tf-cream)] hover:bg-white/6"
-                          )}
-                        >
-                          <span className="text-sm font-semibold">{site.label}</span>
-                          <span
-                            className={cn(
-                              "mt-1 text-sm",
-                              activeSite === site.id
-                                ? "text-white/72"
-                                : isOriginalStyle
-                                  ? "text-slate-500"
-                                  : "text-[var(--tf-muted)]"
-                            )}
-                          >
-                            {site.preview}
-                          </span>
-                        </button>
+                      {alternateSites.map((site) => (
+                        (() => {
+                          const SiteIcon = site.icon;
+
+                          return (
+                            <button
+                              key={site.id}
+                              type="button"
+                              onClick={() => {
+                                window.history.pushState(null, "", getSiteHref(site.path));
+                                setActiveSite(site.id);
+                                setIsSiteMenuOpen(false);
+                                window.scrollTo({ top: 0, behavior: "smooth" });
+                              }}
+                              className={cn(
+                                "tf-route-button tf-route-option inline-flex w-full items-center gap-2 whitespace-nowrap rounded-full px-4 py-2 text-left text-xs font-semibold uppercase tracking-[0.22em] transition",
+                                activeSite === site.id
+                                  ? isOriginalStyle
+                                    ? "bg-slate-900 text-white"
+                                    : "bg-[linear-gradient(90deg,#ff2d00,#ff5c1f)] text-white"
+                                  : isOriginalStyle
+                                    ? "text-slate-900 hover:border-slate-400 hover:bg-white"
+                                    : "text-[var(--tf-cream)] hover:bg-white/6"
+                              )}
+                            >
+                              <SiteIcon className="h-4 w-4" />
+                              {site.label}
+                            </button>
+                          );
+                        })()
                       ))}
                     </motion.div>
                   ) : null}
@@ -563,10 +581,10 @@ export default function WTProgressAppleRedesign() {
                 }
                 aria-label={
                   isOriginalStyle
-                    ? "Switch to rebuilt styling"
-                    : "Switch to original styling"
+                    ? "Switch to dark mode"
+                    : "Switch to light mode"
                 }
-                title={isOriginalStyle ? "Original styling" : "Rebuilt styling"}
+                title={isOriginalStyle ? "Light mode" : "Dark mode"}
                 className="tf-route-button inline-flex items-center gap-1 rounded-full p-1"
               >
                 <span
@@ -626,17 +644,18 @@ export default function WTProgressAppleRedesign() {
                   className={tierChip.Emerald}
                 />
               </>
+            ) : activeSite === "battle-pass" ? (
+              <>
+                <InlineMeta label="Season 10" value={seasonLabel} />
+                <InlineMeta label="Days left" value={`${seasonDaysRemaining}`} />
+                <InlineMeta label="Main track" value="96 levels" />
+                <InlineMeta label="Bonus pages" value="10 levels" />
+              </>
             ) : (
               <>
                 <InlineMeta label="Section" value="Statistics badges" />
                 <InlineMeta label="Tracked" value="4 categories" />
                 <InlineMeta label="Tiers" value="Bronze to Amethyst" />
-                <InlineMeta
-                  label="Status"
-                  value="Mockup"
-                  valueClassName="text-fuchsia-700"
-                  className="border-fuchsia-200 bg-fuchsia-50/90"
-                />
               </>
             )}
           </div>
@@ -703,6 +722,15 @@ export default function WTProgressAppleRedesign() {
                 />
 
                 <ProgressRow
+                  label="Goal rank completion"
+                  value={`${formatNumber(pointsNeeded)} pts left`}
+                  progress={fullCompletionPct}
+                  footerLeft={`${formatNumber(currentPoints)} / 2,400 pts`}
+                  footerRight={`${Math.round(fullCompletionPct)}% complete`}
+                  indicatorClassName={tierAccent[tier as keyof typeof tierAccent]}
+                />
+
+                <ProgressRow
                   label="Season completion"
                   value={`${formatNumber(seasonDaysRemaining)} days left`}
                   progress={seasonElapsedPct}
@@ -710,15 +738,6 @@ export default function WTProgressAppleRedesign() {
                   footerRight={`${Math.round(seasonElapsedPct)}% complete`}
                   large
                   indicatorClassName="bg-slate-900"
-                />
-
-                <ProgressRow
-                  label="Goal rank completion"
-                  value={`${formatNumber(pointsNeeded)} pts left`}
-                  progress={fullCompletionPct}
-                  footerLeft={`${formatNumber(currentPoints)} / 2,400 pts`}
-                  footerRight={`${Math.round(fullCompletionPct)}% complete`}
-                  indicatorClassName={tierAccent[tier as keyof typeof tierAccent]}
                 />
               </div>
 
@@ -808,25 +827,41 @@ export default function WTProgressAppleRedesign() {
                   number="1"
                   title="Pick a playlist"
                   body="Choose Cashout, Quickplay, or Quick Cash before you start logging."
+                  isOriginalStyle={isOriginalStyle}
                 />
                 <OnboardingStep
                   number="2"
                   title="Tap results as you go"
                   body="Use the quick add buttons after each match so the tracker stays effortless."
+                  isOriginalStyle={isOriginalStyle}
                 />
                 <OnboardingStep
                   number="3"
                   title="Sync if needed"
                   body="If you already have progress, use the exact total field below to catch up instantly."
+                  isOriginalStyle={isOriginalStyle}
                 />
               </div>
             ) : (
               <div className="mt-6 space-y-4">
-                <FocusRow label="Earned today" value={`+${formatNumber(todayEarned)}`} />
+                <FocusRow
+                  label="Earned today"
+                  value={`+${formatNumber(todayEarned)}`}
+                  isOriginalStyle={isOriginalStyle}
+                />
                 <FocusRow
                   label="Averaging points per day"
                   value={`${avgPerDay.toFixed(1)} pts/day`}
-                  valueClassName={isOnPace ? "text-emerald-700" : "text-amber-700"}
+                  valueClassName={
+                    isOnPace
+                      ? isOriginalStyle
+                        ? "text-emerald-700"
+                        : "text-emerald-300"
+                      : isOriginalStyle
+                        ? "text-amber-700"
+                        : "text-amber-300"
+                  }
+                  isOriginalStyle={isOriginalStyle}
                 />
               </div>
             )}
@@ -1142,8 +1177,15 @@ export default function WTProgressAppleRedesign() {
           </AnimatePresence>
         </motion.section>
           </>
-        ) : (
+        ) : activeSite === "statistics-badges" ? (
           <StatisticsBadgeProgressionPage styleMode={visualStyleMode} />
+        ) : (
+          <BattlePassProgressionPage
+            styleMode={visualStyleMode}
+            seasonDaysRemaining={seasonDaysRemaining}
+            elapsedSeasonDays={elapsedSeasonDays}
+            seasonElapsedPct={seasonElapsedPct}
+          />
         )}
       </div>
     </div>
@@ -1213,15 +1255,26 @@ function ProgressRow({
 function FocusRow({
   label,
   value,
-  valueClassName = "text-slate-900",
+  valueClassName = "text-[var(--tf-cream)]",
+  isOriginalStyle,
 }: {
   label: string;
   value: string;
   valueClassName?: string;
+  isOriginalStyle: boolean;
 }) {
   return (
-    <div className="flex items-center justify-between gap-4 rounded-[1.35rem] border border-slate-200 bg-slate-50/90 px-4 py-3">
-      <span className="text-sm text-slate-500">{label}</span>
+    <div
+      className={cn(
+        "flex items-center justify-between gap-4 rounded-[1.35rem] border px-4 py-3",
+        isOriginalStyle
+          ? "border-slate-200 bg-slate-50/90"
+          : "border-white/10 bg-white/4"
+      )}
+    >
+      <span className={cn("text-sm", isOriginalStyle ? "text-slate-500" : "text-[var(--tf-muted)]")}>
+        {label}
+      </span>
       <span className={cn("text-sm font-medium", valueClassName)}>{value}</span>
     </div>
   );
@@ -1231,19 +1284,37 @@ function OnboardingStep({
   number,
   title,
   body,
+  isOriginalStyle,
 }: {
   number: string;
   title: string;
   body: string;
+  isOriginalStyle: boolean;
 }) {
   return (
-    <div className="flex items-start gap-3 rounded-[1.4rem] border border-slate-200 bg-slate-50/90 px-4 py-4">
-      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-slate-500 text-sm font-semibold text-white">
+    <div
+      className={cn(
+        "flex items-start gap-3 rounded-[1.4rem] border px-4 py-4",
+        isOriginalStyle
+          ? "border-slate-200 bg-slate-50/90"
+          : "border-white/10 bg-white/4"
+      )}
+    >
+      <div
+        className={cn(
+          "flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-sm font-semibold text-white",
+          isOriginalStyle ? "bg-slate-500" : "bg-white/15"
+        )}
+      >
         {number}
       </div>
       <div>
-        <div className="text-sm font-medium text-slate-900">{title}</div>
-        <div className="mt-1 text-sm leading-6 text-slate-600">{body}</div>
+        <div className={cn("text-sm font-medium", isOriginalStyle ? "text-slate-900" : "text-[var(--tf-cream)]")}>
+          {title}
+        </div>
+        <div className={cn("mt-1 text-sm leading-6", isOriginalStyle ? "text-slate-600" : "text-[var(--tf-muted)]")}>
+          {body}
+        </div>
       </div>
     </div>
   );
