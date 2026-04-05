@@ -15,6 +15,11 @@ type BattlePassProgressionPageProps = {
 };
 
 type BattlePassBandId = "entry" | "middle" | "later" | "bonus";
+type BattlePassTrack = "free" | "premium" | "ultimate";
+type SavedBattlePassState = {
+  battlePassLevel: number;
+  battlePassTrack: BattlePassTrack;
+};
 
 const BATTLE_PASS_STORAGE_KEY = "wt-battle-pass-progression-state";
 const LEVELS_PER_MAIN_BAND = 32;
@@ -26,6 +31,33 @@ const MIDDLE_XP = 20_000;
 const LATER_XP = 25_000;
 const BONUS_XP = 50_000;
 const NUMBER_FORMATTER = new Intl.NumberFormat("en-US");
+const LIGHT_PROGRESS_TRACK_CLASS =
+  "bg-[rgba(148,163,184,0.22)] shadow-[inset_0_1px_2px_rgba(15,23,42,0.08)]";
+const DEFAULT_BATTLE_PASS_STATE: SavedBattlePassState = {
+  battlePassLevel: 0,
+  battlePassTrack: "free",
+};
+
+const BATTLE_PASS_TRACKS = [
+  {
+    id: "free" as const,
+    label: "Free",
+    helper: "Keep the page focused on the free reward line while tracking the same level milestones.",
+    rewardsSummary: "Free rewards only",
+  },
+  {
+    id: "premium" as const,
+    label: "Premium",
+    helper: "Use the paid reward track view while keeping your progression tied to level milestones.",
+    rewardsSummary: "Free + premium rewards",
+  },
+  {
+    id: "ultimate" as const,
+    label: "Ultimate",
+    helper: "Plan around the most complete reward track without needing to manage live XP totals.",
+    rewardsSummary: "Premium rewards + ultimate extras",
+  },
+];
 
 const BATTLE_PASS_BANDS = [
   {
@@ -121,15 +153,25 @@ function formatNumber(value: number) {
   return NUMBER_FORMATTER.format(Math.max(0, Math.round(value)));
 }
 
-function getSavedBattlePassLevel() {
-  if (typeof window === "undefined") return 0;
+function getBattlePassTrack(value: unknown): BattlePassTrack {
+  return value === "premium" || value === "ultimate" ? value : "free";
+}
+
+function getSavedBattlePassState(): SavedBattlePassState {
+  if (typeof window === "undefined") return DEFAULT_BATTLE_PASS_STATE;
 
   try {
     const saved = window.localStorage.getItem(BATTLE_PASS_STORAGE_KEY);
-    if (!saved) return 0;
-    return clampLevel(Number(JSON.parse(saved).battlePassLevel ?? 0));
+    if (!saved) return DEFAULT_BATTLE_PASS_STATE;
+
+    const parsed = JSON.parse(saved);
+
+    return {
+      battlePassLevel: clampLevel(Number(parsed.battlePassLevel ?? 0)),
+      battlePassTrack: getBattlePassTrack(parsed.battlePassTrack),
+    };
   } catch {
-    return 0;
+    return DEFAULT_BATTLE_PASS_STATE;
   }
 }
 
@@ -191,21 +233,33 @@ export function BattlePassProgressionPage({
   elapsedSeasonDays,
   seasonElapsedPct,
 }: BattlePassProgressionPageProps) {
-  const [battlePassLevel, setBattlePassLevel] = useState(() => getSavedBattlePassLevel());
-  const [inputValue, setInputValue] = useState(() => String(getSavedBattlePassLevel()));
+  const initialSavedState = useMemo(() => getSavedBattlePassState(), []);
+  const [savedState, setSavedState] = useState<SavedBattlePassState>(initialSavedState);
+  const [inputValue, setInputValue] = useState(() => String(initialSavedState.battlePassLevel));
   const isOriginalStyle = styleMode === "original";
   const bodyTextClass = isOriginalStyle ? "text-slate-600" : "text-[var(--tf-muted)]";
+  const progressTrackClass = isOriginalStyle ? undefined : LIGHT_PROGRESS_TRACK_CLASS;
+  const battlePassLevel = savedState.battlePassLevel;
+  const battlePassTrack = savedState.battlePassTrack;
 
   useEffect(() => {
     if (typeof window === "undefined") return;
     window.localStorage.setItem(
       BATTLE_PASS_STORAGE_KEY,
-      JSON.stringify({ battlePassLevel })
+      JSON.stringify(savedState)
     );
-  }, [battlePassLevel]);
+  }, [savedState]);
 
   const currentBand = useMemo(() => getCurrentBand(battlePassLevel), [battlePassLevel]);
+  const selectedTrack = useMemo(
+    () => BATTLE_PASS_TRACKS.find((track) => track.id === battlePassTrack) ?? BATTLE_PASS_TRACKS[0],
+    [battlePassTrack]
+  );
   const activeBandStyles = BAND_STYLES[currentBand.id];
+  const levelHeadlineClass =
+    battlePassLevel >= 100
+      ? "text-[clamp(3.5rem,8vw,6rem)]"
+      : "text-[clamp(4rem,10vw,7.5rem)]";
   const mainCompletedLevels = Math.min(battlePassLevel, MAIN_TRACK_LEVELS);
   const bonusCompletedLevels = Math.min(
     Math.max(0, battlePassLevel - MAIN_TRACK_LEVELS),
@@ -220,7 +274,7 @@ export function BattlePassProgressionPage({
 
   function applyLevel(nextLevel: number) {
     const safeLevel = clampLevel(nextLevel);
-    setBattlePassLevel(safeLevel);
+    setSavedState((currentState) => ({ ...currentState, battlePassLevel: safeLevel }));
     setInputValue(String(safeLevel));
   }
 
@@ -238,11 +292,12 @@ export function BattlePassProgressionPage({
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.04, duration: 0.35 }}
           className={cn(
-            "rounded-[2.25rem] border bg-gradient-to-br p-6 shadow-[0_20px_60px_rgba(15,23,42,0.08)] md:p-8",
-            activeBandStyles.panel,
+            isOriginalStyle
+              ? `rounded-[2.25rem] border bg-gradient-to-br p-6 shadow-[0_20px_60px_rgba(15,23,42,0.08)] md:p-8 ${activeBandStyles.panel}`
+              : "tf-panel tf-panel-accent rounded-[2.25rem] p-6 md:p-8",
             isOriginalStyle
               ? "border-white/70"
-              : "tf-panel tf-panel-accent border-white/10"
+              : "bg-[radial-gradient(circle_at_top_left,rgba(210,31,60,0.18),transparent_24%),linear-gradient(180deg,rgba(18,19,24,0.96),rgba(9,10,12,0.92))]"
           )}
         >
           <div className="flex flex-col gap-8">
@@ -259,10 +314,11 @@ export function BattlePassProgressionPage({
                 <div className="mt-4 flex flex-wrap items-end gap-3">
                   <div
                     className={cn(
-                      "text-6xl font-semibold tracking-tight md:text-8xl",
+                      "whitespace-nowrap font-semibold tracking-tight leading-none",
+                      levelHeadlineClass,
                       isOriginalStyle
                         ? "text-slate-900"
-                        : "text-white drop-shadow-[0_12px_30px_rgba(0,0,0,0.4)]"
+                        : "text-[var(--tf-cream)] drop-shadow-[0_12px_30px_rgba(0,0,0,0.4)]"
                     )}
                   >
                     Level {formatNumber(battlePassLevel)}
@@ -292,6 +348,7 @@ export function BattlePassProgressionPage({
                 footerLeft={`${formatNumber(mainCompletedLevels)} / ${formatNumber(MAIN_TRACK_LEVELS)} levels`}
                 footerRight={`${Math.round(mainProgress)}% complete`}
                 indicatorClassName="bg-sky-500"
+                trackClassName={progressTrackClass}
               />
 
               <BattlePassProgressRow
@@ -311,6 +368,7 @@ export function BattlePassProgressionPage({
                     : `${Math.round(bonusProgress)}% complete`
                 }
                 indicatorClassName="bg-fuchsia-500"
+                trackClassName={progressTrackClass}
               />
 
               <BattlePassProgressRow
@@ -320,6 +378,7 @@ export function BattlePassProgressionPage({
                 footerLeft={`${formatNumber(battlePassLevel)} / ${formatNumber(TOTAL_TRACKED_LEVELS)} tracked levels`}
                 footerRight={`${Math.round(overallProgress)}% complete`}
                 indicatorClassName={activeBandStyles.accent}
+                trackClassName={progressTrackClass}
               />
 
               <BattlePassProgressRow
@@ -330,6 +389,7 @@ export function BattlePassProgressionPage({
                 footerRight={`${Math.round(seasonElapsedPct)}% complete`}
                 indicatorClassName="bg-slate-900"
                 large
+                trackClassName={progressTrackClass}
               />
             </div>
           </div>
@@ -364,8 +424,9 @@ export function BattlePassProgressionPage({
                 bodyTextClass
               )}
             >
-              Use the level you see in game. This page keeps the mockup tied to
-              level milestones instead of live XP totals.
+              Choose your pass type, then use the level you see in game. This
+              page keeps progression tied to level milestones instead of live XP
+              totals.
             </p>
           </div>
 
@@ -377,10 +438,52 @@ export function BattlePassProgressionPage({
                 : "border-white/10 bg-white/4"
             )}
           >
+            <div
+              className={cn(
+                "text-xs font-semibold uppercase tracking-[0.18em]",
+                isOriginalStyle ? "text-slate-500" : "text-[var(--tf-muted)]"
+              )}
+            >
+              Battle Pass type
+            </div>
+            <div className="mt-3 grid grid-cols-3 gap-2">
+              {BATTLE_PASS_TRACKS.map((track) => {
+                const isActive = battlePassTrack === track.id;
+
+                return (
+                  <button
+                    key={track.id}
+                    type="button"
+                    onClick={() =>
+                      setSavedState((currentState) => ({
+                        ...currentState,
+                        battlePassTrack: track.id,
+                      }))
+                    }
+                    className={cn(
+                      "rounded-[1rem] border px-3 py-3 text-sm font-medium transition",
+                      isActive
+                        ? isOriginalStyle
+                          ? "border-rose-200 bg-rose-50 text-rose-700 shadow-[0_12px_30px_rgba(244,63,94,0.12)]"
+                          : "border-[color:var(--tf-accent)] bg-[linear-gradient(90deg,var(--tf-accent-strong),var(--tf-accent))] text-[var(--tf-white)] shadow-[0_18px_40px_rgba(210,31,60,0.24)]"
+                        : isOriginalStyle
+                          ? "border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-100"
+                          : "border-white/10 bg-white/4 text-[var(--tf-muted)] hover:bg-white/8 hover:text-[var(--tf-cream)]"
+                    )}
+                  >
+                    {track.label}
+                  </button>
+                );
+              })}
+            </div>
+            <p className={cn("mt-3 text-sm leading-6", bodyTextClass)}>
+              {selectedTrack.helper}
+            </p>
+
             <label
               htmlFor="battle-pass-level"
               className={cn(
-                "text-xs font-semibold uppercase tracking-[0.18em]",
+                "mt-5 block text-xs font-semibold uppercase tracking-[0.18em]",
                 isOriginalStyle ? "text-slate-500" : "text-[var(--tf-muted)]"
               )}
             >
@@ -429,27 +532,6 @@ export function BattlePassProgressionPage({
             </div>
           </div>
 
-          <div className="mt-6 space-y-4">
-            <BattlePassMiniRow
-              label="Main track"
-              value={`${formatNumber(mainCompletedLevels)} / ${formatNumber(MAIN_TRACK_LEVELS)} levels`}
-              isOriginalStyle={isOriginalStyle}
-            />
-            <BattlePassMiniRow
-              label="Bonus pages"
-              value={
-                battlePassLevel < MAIN_TRACK_LEVELS
-                  ? "Locked"
-                  : `${formatNumber(bonusCompletedLevels)} / ${formatNumber(BONUS_LEVELS)} levels`
-              }
-              isOriginalStyle={isOriginalStyle}
-            />
-            <BattlePassMiniRow
-              label="Current model"
-              value="32 entry, 32 middle, 32 later, 10 bonus"
-              isOriginalStyle={isOriginalStyle}
-            />
-          </div>
         </motion.aside>
       </div>
 
@@ -600,7 +682,7 @@ export function BattlePassProgressionPage({
                     <Progress
                       value={progress}
                       indicatorClassName={styles.accent}
-                      className="h-3 rounded-full bg-black/18"
+                      className={cn("h-3 rounded-full", progressTrackClass ?? "bg-black/18")}
                     />
                     <div className="mt-2 flex items-center justify-between text-xs text-slate-500">
                       <span>Start</span>
@@ -625,6 +707,7 @@ function BattlePassProgressRow({
   footerRight,
   large = false,
   indicatorClassName,
+  trackClassName,
 }: {
   label: string;
   value: string;
@@ -633,6 +716,7 @@ function BattlePassProgressRow({
   footerRight: string;
   large?: boolean;
   indicatorClassName?: string;
+  trackClassName?: string;
 }) {
   return (
     <div>
@@ -643,7 +727,7 @@ function BattlePassProgressRow({
       <Progress
         value={progress}
         indicatorClassName={indicatorClassName}
-        className={cn("tf-progress-track rounded-full", large ? "h-4" : "h-3")}
+        className={cn("tf-progress-track rounded-full", large ? "h-4" : "h-3", trackClassName)}
       />
       <div className="mt-2 flex items-center justify-between text-xs text-[var(--tf-muted)]">
         <span>{footerLeft}</span>
@@ -691,30 +775,3 @@ function BattlePassMetaCard({
   );
 }
 
-function BattlePassMiniRow({
-  label,
-  value,
-  isOriginalStyle,
-}: {
-  label: string;
-  value: string;
-  isOriginalStyle: boolean;
-}) {
-  return (
-    <div
-      className={cn(
-        "flex items-center justify-between gap-4 rounded-[1.35rem] border px-4 py-3",
-        isOriginalStyle
-          ? "border-slate-200 bg-slate-50/90"
-          : "border-white/10 bg-white/4"
-      )}
-    >
-      <span className={cn("text-sm", isOriginalStyle ? "text-slate-500" : "text-[var(--tf-muted)]")}>
-        {label}
-      </span>
-      <span className={cn("text-sm font-medium", isOriginalStyle ? "text-slate-900" : "text-[var(--tf-cream)]")}>
-        {value}
-      </span>
-    </div>
-  );
-}
