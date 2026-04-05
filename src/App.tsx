@@ -50,6 +50,8 @@ const STORAGE_KEY = "wt-progress-tracker-state";
 const STYLE_MODE_STORAGE_KEY = "wt-progress-style-mode";
 const SEASON_DAY_TIMER_OFFSET = -1;
 const SEASON_START = new Date("2026-03-26T00:00:00");
+const LIGHT_PROGRESS_TRACK_CLASS =
+  "bg-[rgba(148,163,184,0.22)] shadow-[inset_0_1px_2px_rgba(15,23,42,0.08)]";
 
 function getTodayStamp() {
   const now = new Date();
@@ -471,24 +473,24 @@ export default function WTProgressAppleRedesign() {
           className={cn(
             "absolute rounded-full blur-3xl",
             isOriginalStyle
-              ? "left-[-6rem] top-[-4rem] h-72 w-72 bg-amber-200/55"
-              : "left-[-8rem] top-[-6rem] h-80 w-80 bg-[#ff5c1f]/18"
+              ? "left-[-6rem] top-[-4rem] h-72 w-72 bg-[#D21F3C]/16"
+              : "left-[-8rem] top-[-6rem] h-80 w-80 bg-[#D21F3C]/20"
           )}
         />
         <div
           className={cn(
             "absolute rounded-full blur-3xl",
             isOriginalStyle
-              ? "right-[-5rem] top-24 h-80 w-80 bg-emerald-200/35"
-              : "right-[-6rem] top-14 h-96 w-96 bg-[#ff2d00]/14"
+              ? "right-[-5rem] top-24 h-80 w-80 bg-[#F7BB2B]/18"
+              : "right-[-6rem] top-14 h-96 w-96 bg-[#F7BB2B]/12"
           )}
         />
         <div
           className={cn(
             "absolute left-1/2 -translate-x-1/2 rounded-full blur-3xl",
             isOriginalStyle
-              ? "bottom-[-8rem] h-72 w-72 bg-sky-200/25"
-              : "bottom-[-10rem] h-80 w-80 bg-white/6"
+              ? "bottom-[-8rem] h-72 w-72 bg-[#E5E6E8]/28"
+              : "bottom-[-10rem] h-80 w-80 bg-[#E5E6E8]/6"
           )}
         />
       </div>
@@ -513,7 +515,7 @@ export default function WTProgressAppleRedesign() {
                   className="tf-route-button inline-flex items-center gap-2 rounded-full px-4 py-2 text-xs font-semibold uppercase tracking-[0.22em] transition hover:border-white/20 hover:bg-white/10"
                 >
                   <ActiveSiteIcon
-                    className={cn("h-4 w-4", isOriginalStyle ? "text-slate-900" : "text-[#ff5c1f]")}
+                    className={cn("h-4 w-4", isOriginalStyle ? "text-slate-900" : "text-[var(--tf-accent)]")}
                   />
                   {activeSiteConfig.label}
                   <ChevronDown
@@ -557,7 +559,7 @@ export default function WTProgressAppleRedesign() {
                                 activeSite === site.id
                                   ? isOriginalStyle
                                     ? "bg-slate-900 text-white"
-                                    : "bg-[linear-gradient(90deg,#ff2d00,#ff5c1f)] text-white"
+                                    : "bg-[linear-gradient(90deg,var(--tf-accent-strong),var(--tf-accent))] text-white"
                                   : isOriginalStyle
                                     ? "text-slate-900 hover:border-slate-400 hover:bg-white"
                                     : "text-[var(--tf-cream)] hover:bg-white/6"
@@ -602,7 +604,7 @@ export default function WTProgressAppleRedesign() {
                     "grid h-9 w-9 place-items-center rounded-full transition",
                     isOriginalStyle
                       ? "text-[var(--tf-muted)]"
-                      : "bg-[linear-gradient(90deg,#ff2d00,#ff5c1f)] text-white shadow-sm"
+                      : "bg-[linear-gradient(90deg,var(--tf-accent-strong),var(--tf-accent))] text-white shadow-sm"
                   )}
                 >
                   <Moon className="h-4 w-4" />
@@ -674,7 +676,7 @@ export default function WTProgressAppleRedesign() {
                 : "tf-panel tf-panel-accent rounded-[2.25rem] p-6 md:p-8",
               isOriginalStyle
                 ? ""
-                : "bg-[radial-gradient(circle_at_top_left,rgba(255,92,31,0.18),transparent_24%),linear-gradient(180deg,rgba(18,19,24,0.96),rgba(9,10,12,0.92))]"
+                : "bg-[radial-gradient(circle_at_top_left,rgba(239,68,68,0.18),transparent_24%),linear-gradient(180deg,rgba(18,19,24,0.96),rgba(9,10,12,0.92))]"
             )}
           >
             <div className="flex flex-col gap-8">
@@ -738,6 +740,7 @@ export default function WTProgressAppleRedesign() {
                   footerRight={`${Math.round(seasonElapsedPct)}% complete`}
                   large
                   indicatorClassName="bg-slate-900"
+                  trackClassName={isOriginalStyle ? undefined : LIGHT_PROGRESS_TRACK_CLASS}
                 />
               </div>
 
@@ -929,7 +932,7 @@ export default function WTProgressAppleRedesign() {
                       matchMode === mode.id
                         ? isOriginalStyle
                           ? "bg-slate-900 text-white shadow-sm"
-                          : "bg-[linear-gradient(90deg,#ff2d00,#ff5c1f)] text-white shadow-sm"
+                          : "bg-[linear-gradient(90deg,var(--tf-accent-strong),var(--tf-accent))] text-white shadow-sm"
                         : isOriginalStyle
                           ? "text-slate-500 hover:bg-slate-100 hover:text-slate-900"
                           : "text-[var(--tf-muted)] hover:bg-white/6 hover:text-[var(--tf-cream)]"
@@ -950,7 +953,7 @@ export default function WTProgressAppleRedesign() {
                       button.emphasis
                         ? isOriginalStyle
                           ? "border-slate-900 bg-slate-900 text-white"
-                          : "border-[#ff5c1f] bg-[linear-gradient(135deg,#ff2d00,#ff5c1f)] text-white"
+                          : "border-[var(--tf-accent)] bg-[linear-gradient(135deg,var(--tf-accent-strong),var(--tf-accent))] text-white"
                         : isOriginalStyle
                           ? "border-slate-200 bg-white text-slate-900"
                           : "border-white/10 bg-white/4 text-[var(--tf-cream)]"
@@ -1224,6 +1227,7 @@ function ProgressRow({
   footerRight,
   large = false,
   indicatorClassName,
+  trackClassName,
 }: {
   label: string;
   value: string;
@@ -1232,6 +1236,7 @@ function ProgressRow({
   footerRight: string;
   large?: boolean;
   indicatorClassName?: string;
+  trackClassName?: string;
 }) {
   return (
     <div>
@@ -1242,7 +1247,7 @@ function ProgressRow({
       <Progress
         value={progress}
         indicatorClassName={indicatorClassName}
-        className={cn("tf-progress-track rounded-full", large ? "h-4" : "h-3")}
+        className={cn("tf-progress-track rounded-full", large ? "h-4" : "h-3", trackClassName)}
       />
       <div className="mt-2 flex items-center justify-between text-xs text-[var(--tf-muted)]">
         <span>{footerLeft}</span>
