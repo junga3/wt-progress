@@ -315,7 +315,7 @@ export function StatisticsBadgeProgressionPage({
             >
               <label
                 htmlFor={`game-input-${stat.id}`}
-                className="text-2xl font-semibold uppercase italic tracking-[0.02em] text-white"
+                className="text-3xl font-semibold uppercase italic leading-none tracking-[0.02em] text-white md:text-4xl"
               >
                 {stat.gameLabel}
               </label>
@@ -331,7 +331,7 @@ export function StatisticsBadgeProgressionPage({
                     [stat.id]: sanitizeNumericInput(event.target.value),
                   }))
                 }
-                className="h-auto border-none bg-transparent px-0 py-0 text-right text-3xl font-semibold tracking-tight text-white shadow-none focus-visible:ring-0"
+                className="h-auto border-none bg-transparent px-0 py-0 text-right text-3xl font-semibold uppercase italic leading-none tracking-[0.02em] text-white shadow-none focus-visible:ring-0 md:text-4xl"
                 placeholder={stat.placeholder}
               />
             </div>
