@@ -1,9 +1,13 @@
 import { useEffect, useMemo, useState } from "react";
 import { motion } from "framer-motion";
-import { Gift, Layers3 } from "lucide-react";
+import { Crown, Gift, Layers3, Star } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
+import {
+  SEASON_10_BATTLE_PASS_REWARDS,
+  type Season10BattlePassReward,
+} from "@/data/season10BattlePassRewards";
 import { cn } from "@/lib/utils";
 
 type StyleMode = "rebuilt" | "original";
@@ -42,20 +46,17 @@ const BATTLE_PASS_TRACKS = [
   {
     id: "free" as const,
     label: "Free",
-    helper: "Keep the page focused on the free reward line while tracking the same level milestones.",
-    rewardsSummary: "Free rewards only",
+    rewardsSummary: "Free",
   },
   {
     id: "premium" as const,
     label: "Premium",
-    helper: "Use the paid reward track view while keeping your progression tied to level milestones.",
-    rewardsSummary: "Free + premium rewards",
+    rewardsSummary: "Free + Premium",
   },
   {
     id: "ultimate" as const,
     label: "Ultimate",
-    helper: "Plan around the most complete reward track without needing to manage live XP totals.",
-    rewardsSummary: "Premium rewards + ultimate extras",
+    rewardsSummary: "All Tracks",
   },
 ];
 
@@ -106,6 +107,9 @@ const BAND_STYLES: Record<
     text: string;
     accent: string;
     panel: string;
+    segmentTrack: string;
+    segmentFill: string;
+    segmentText: string;
   }
 > = {
   entry: {
@@ -114,6 +118,9 @@ const BAND_STYLES: Record<
     text: "text-amber-700",
     accent: "bg-amber-500",
     panel: "from-amber-100 via-orange-50 to-white",
+    segmentTrack: "bg-amber-400/20",
+    segmentFill: "bg-amber-400",
+    segmentText: "text-amber-100",
   },
   middle: {
     chip: "border-sky-200 bg-sky-50 text-sky-700",
@@ -121,6 +128,9 @@ const BAND_STYLES: Record<
     text: "text-sky-700",
     accent: "bg-sky-500",
     panel: "from-sky-100 via-cyan-50 to-white",
+    segmentTrack: "bg-sky-400/20",
+    segmentFill: "bg-sky-400",
+    segmentText: "text-sky-100",
   },
   later: {
     chip: "border-emerald-200 bg-emerald-50 text-emerald-700",
@@ -128,6 +138,9 @@ const BAND_STYLES: Record<
     text: "text-emerald-700",
     accent: "bg-emerald-500",
     panel: "from-emerald-100 via-green-50 to-white",
+    segmentTrack: "bg-emerald-400/20",
+    segmentFill: "bg-emerald-400",
+    segmentText: "text-emerald-100",
   },
   bonus: {
     chip: "border-fuchsia-200 bg-fuchsia-50 text-fuchsia-700",
@@ -135,6 +148,9 @@ const BAND_STYLES: Record<
     text: "text-fuchsia-700",
     accent: "bg-fuchsia-500",
     panel: "from-fuchsia-100 via-violet-50 to-white",
+    segmentTrack: "bg-fuchsia-400/20",
+    segmentFill: "bg-fuchsia-400",
+    segmentText: "text-fuchsia-100",
   },
   complete: {
     chip: "border-slate-200 bg-slate-50 text-slate-700",
@@ -142,8 +158,87 @@ const BAND_STYLES: Record<
     text: "text-slate-700",
     accent: "bg-slate-500",
     panel: "from-slate-100 via-white to-slate-50",
+    segmentTrack: "bg-slate-400/20",
+    segmentFill: "bg-slate-400",
+    segmentText: "text-slate-100",
   },
 };
+
+const LEVEL_MARKS = Array.from({ length: TOTAL_TRACKED_LEVELS }, (_, index) => index + 1);
+const LEVEL_LABEL_MARKS = LEVEL_MARKS.filter(
+  (level) => level % 10 === 0 || level === TOTAL_TRACKED_LEVELS
+);
+const TRACKS_VISIBLE_BY_PASS: Record<BattlePassTrack, BattlePassTrack[]> = {
+  free: ["free"],
+  premium: ["free", "premium"],
+  ultimate: ["free", "premium", "ultimate"],
+};
+const REWARD_COUNT_BY_TRACK: Record<BattlePassTrack, number> = {
+  free: SEASON_10_BATTLE_PASS_REWARDS.filter((reward) => reward.tier === "free")
+    .length,
+  premium: SEASON_10_BATTLE_PASS_REWARDS.filter(
+    (reward) => reward.tier === "premium"
+  ).length,
+  ultimate: SEASON_10_BATTLE_PASS_REWARDS.filter(
+    (reward) => reward.tier === "ultimate"
+  ).length,
+};
+type BattlePassLevelRewards = Record<
+  BattlePassTrack,
+  Season10BattlePassReward | null
+>;
+const SEASON_10_REWARD_LOOKUP = LEVEL_MARKS.reduce((lookup, level) => {
+  lookup.set(level, {
+    free: null,
+    premium: null,
+    ultimate: null,
+  });
+
+  return lookup;
+}, new Map<number, BattlePassLevelRewards>());
+
+for (const reward of SEASON_10_BATTLE_PASS_REWARDS) {
+  SEASON_10_REWARD_LOOKUP.get(reward.level)![reward.tier] = reward;
+}
+
+const BATTLE_PASS_REWARD_ROWS = [
+  {
+    id: "premium" as const,
+    label: "Premium",
+    cadence: `${formatNumber(REWARD_COUNT_BY_TRACK.premium)} rewards`,
+    icon: Star,
+    activeTickClass: "bg-[#ffd451] shadow-[0_0_0_1px_rgba(255,212,81,0.32),0_0_22px_rgba(255,212,81,0.34)]",
+    mutedTickClass: "bg-[#8d7221] shadow-[0_0_0_1px_rgba(255,212,81,0.18)]",
+    activePanelClass: "border-[#ffd451]/40 bg-[#ffd451]/16 text-[#ffe08a]",
+    mutedPanelClass: "border-[#8d7221]/45 bg-[rgba(141,114,33,0.24)] text-[#d8c179]",
+    textClass: "text-[#f2c94c]",
+    iconClass: "text-[#f2c94c]",
+  },
+  {
+    id: "free" as const,
+    label: "Free",
+    cadence: `${formatNumber(REWARD_COUNT_BY_TRACK.free)} rewards`,
+    icon: Gift,
+    activeTickClass: "bg-[#e9edf3] shadow-[0_0_0_1px_rgba(233,237,243,0.28),0_0_20px_rgba(233,237,243,0.22)]",
+    mutedTickClass: "bg-[#76808d] shadow-[0_0_0_1px_rgba(200,208,220,0.16)]",
+    activePanelClass: "border-[#d7dee9]/38 bg-[rgba(233,237,243,0.16)] text-[#f2f5fa]",
+    mutedPanelClass: "border-[#76808d]/45 bg-[rgba(118,128,141,0.22)] text-[#c5ced9]",
+    textClass: "text-[#e7ecf4]",
+    iconClass: "text-[#e7ecf4]",
+  },
+  {
+    id: "ultimate" as const,
+    label: "Ultimate",
+    cadence: `${formatNumber(REWARD_COUNT_BY_TRACK.ultimate)} rewards`,
+    icon: Crown,
+    activeTickClass: "bg-[#ff4568] shadow-[0_0_0_1px_rgba(255,69,104,0.28),0_0_22px_rgba(255,69,104,0.3)]",
+    mutedTickClass: "bg-[#7d2435] shadow-[0_0_0_1px_rgba(255,69,104,0.16)]",
+    activePanelClass: "border-[#ff4568]/38 bg-[rgba(255,69,104,0.16)] text-[#ff9aae]",
+    mutedPanelClass: "border-[#7d2435]/45 bg-[rgba(125,36,53,0.24)] text-[#d98193]",
+    textClass: "text-[#ff7f97]",
+    iconClass: "text-[#ff7f97]",
+  },
+];
 
 function clampLevel(value: number) {
   return Math.min(TOTAL_TRACKED_LEVELS, Math.max(0, Math.round(value)));
@@ -182,7 +277,7 @@ function getCurrentBand(level: number) {
     return {
       id: "complete" as const,
       label: "Complete",
-      subtitle: "Main pass and bonus rewards finished",
+      subtitle: "All rewards unlocked",
       nextCheckpoint: "All tracked levels complete",
       levelsLeftInBand: 0,
     };
@@ -192,7 +287,7 @@ function getCurrentBand(level: number) {
     return {
       id: "bonus" as const,
       label: "Bonus levels",
-      subtitle: "Bonus reward levels are active",
+      subtitle: "Bonus page active",
       nextCheckpoint: `Level ${safeLevel + 1}`,
       levelsLeftInBand: TOTAL_TRACKED_LEVELS - safeLevel,
     };
@@ -202,7 +297,7 @@ function getCurrentBand(level: number) {
     return {
       id: "later" as const,
       label: "Later levels",
-      subtitle: "Later-level XP band is active",
+      subtitle: "Later levels active",
       nextCheckpoint: `Level ${safeLevel + 1}`,
       levelsLeftInBand: MAIN_TRACK_LEVELS - safeLevel,
     };
@@ -212,7 +307,7 @@ function getCurrentBand(level: number) {
     return {
       id: "middle" as const,
       label: "Middle levels",
-      subtitle: "Middle-level XP band is active",
+      subtitle: "Mid levels active",
       nextCheckpoint: `Level ${safeLevel + 1}`,
       levelsLeftInBand: LEVELS_PER_MAIN_BAND * 2 - safeLevel,
     };
@@ -221,10 +316,89 @@ function getCurrentBand(level: number) {
   return {
     id: "entry" as const,
     label: "Entry levels",
-    subtitle: safeLevel === 0 ? "Start at level 1 and build the early track" : "Entry XP band is active",
+    subtitle: safeLevel === 0 ? "Ready to start" : "Entry levels active",
     nextCheckpoint: `Level ${safeLevel + 1}`,
     levelsLeftInBand: LEVELS_PER_MAIN_BAND - safeLevel,
   };
+}
+
+function clampRewardPreviewLevel(value: number) {
+  return Math.min(TOTAL_TRACKED_LEVELS, Math.max(1, Math.round(value)));
+}
+
+function getBandForLevel(level: number) {
+  return (
+    BATTLE_PASS_BANDS.find(
+      (band) =>
+        level > band.startCompletedLevel &&
+        level <= band.startCompletedLevel + band.levels
+    ) ?? BATTLE_PASS_BANDS[BATTLE_PASS_BANDS.length - 1]
+  );
+}
+
+function getBattlePassRewardAtLevel(level: number, track: BattlePassTrack) {
+  return SEASON_10_REWARD_LOOKUP.get(clampRewardPreviewLevel(level))?.[track] ?? null;
+}
+
+function hasBattlePassRewardAtLevel(level: number, track: BattlePassTrack) {
+  return getBattlePassRewardAtLevel(level, track) !== null;
+}
+
+function isRewardHighlightedInView(
+  selectedTrack: BattlePassTrack,
+  rewardTrack: BattlePassTrack
+) {
+  return TRACKS_VISIBLE_BY_PASS[selectedTrack].includes(rewardTrack);
+}
+
+function getRewardTickClass({
+  isHighlighted,
+  isSelected,
+  activeTickClass,
+  mutedTickClass,
+}: {
+  isHighlighted: boolean;
+  isSelected: boolean;
+  activeTickClass: string;
+  mutedTickClass: string;
+}) {
+  return cn(
+    "block h-4 w-[80%] rounded-full transition-all duration-150",
+    isHighlighted ? activeTickClass : mutedTickClass,
+    isSelected ? "scale-y-[1.35]" : "scale-y-100"
+  );
+}
+
+function getRewardPreviewCopy(level: number, track: BattlePassTrack) {
+  const reward = getBattlePassRewardAtLevel(level, track);
+
+  if (!reward) {
+    return `No ${track} reward at this level`;
+  }
+
+  return `${reward.name}, ${reward.rarity} ${reward.type}`;
+}
+
+function getProgressTickClass({
+  isCompleted,
+  isCurrentLevel,
+  isOriginalStyle,
+}: {
+  isCompleted: boolean;
+  isCurrentLevel: boolean;
+  isOriginalStyle: boolean;
+}) {
+  return cn(
+    "block h-4 w-[80%] rounded-full transition-all duration-150",
+    isCompleted
+      ? isOriginalStyle
+        ? "bg-rose-500 shadow-[0_0_0_1px_rgba(244,63,94,0.22),0_0_18px_rgba(244,63,94,0.2)]"
+        : "bg-[#ff4568] shadow-[0_0_0_1px_rgba(255,69,104,0.28),0_0_22px_rgba(255,69,104,0.3)]"
+      : isOriginalStyle
+        ? "border border-dashed border-slate-300 bg-slate-200/70"
+        : "border border-dashed border-white/18 bg-white/[0.1]",
+    isCurrentLevel ? "scale-y-[1.35]" : "scale-y-100"
+  );
 }
 
 export function BattlePassProgressionPage({
@@ -236,8 +410,10 @@ export function BattlePassProgressionPage({
   const initialSavedState = useMemo(() => getSavedBattlePassState(), []);
   const [savedState, setSavedState] = useState<SavedBattlePassState>(initialSavedState);
   const [inputValue, setInputValue] = useState(() => String(initialSavedState.battlePassLevel));
+  const [inspectedLevel, setInspectedLevel] = useState(() =>
+    clampRewardPreviewLevel(initialSavedState.battlePassLevel || 1)
+  );
   const isOriginalStyle = styleMode === "original";
-  const bodyTextClass = isOriginalStyle ? "text-slate-600" : "text-[var(--tf-muted)]";
   const progressTrackClass = isOriginalStyle ? undefined : LIGHT_PROGRESS_TRACK_CLASS;
   const battlePassLevel = savedState.battlePassLevel;
   const battlePassTrack = savedState.battlePassTrack;
@@ -271,11 +447,37 @@ export function BattlePassProgressionPage({
   const mainLevelsLeft = Math.max(0, MAIN_TRACK_LEVELS - mainCompletedLevels);
   const bonusLevelsLeft = Math.max(0, BONUS_LEVELS - bonusCompletedLevels);
   const totalLevelsLeft = Math.max(0, TOTAL_TRACKED_LEVELS - battlePassLevel);
+  const includedRewardTracks = TRACKS_VISIBLE_BY_PASS[battlePassTrack];
+  const rewardMapGridTemplate = `repeat(${TOTAL_TRACKED_LEVELS}, minmax(0, 1fr))`;
+  const rewardMapLayoutColumns = "clamp(72px, 8vw, 88px) minmax(0, 1fr)";
+  const inspectedLevelLeft = `${((inspectedLevel - 1) / TOTAL_TRACKED_LEVELS) * 100}%`;
+  const inspectedLevelWidth = `${100 / TOTAL_TRACKED_LEVELS}%`;
+
+  const levelRewardMap = useMemo(
+    () =>
+      LEVEL_MARKS.map((level) => ({
+        level,
+        band: getBandForLevel(level),
+        rewards: {
+          premium: getBattlePassRewardAtLevel(level, "premium"),
+          free: getBattlePassRewardAtLevel(level, "free"),
+          ultimate: getBattlePassRewardAtLevel(level, "ultimate"),
+        },
+      })),
+    []
+  );
+  const inspectedLevelData = useMemo(
+    () =>
+      levelRewardMap.find((item) => item.level === inspectedLevel) ??
+      levelRewardMap[0],
+    [inspectedLevel, levelRewardMap]
+  );
 
   function applyLevel(nextLevel: number) {
     const safeLevel = clampLevel(nextLevel);
     setSavedState((currentState) => ({ ...currentState, battlePassLevel: safeLevel }));
     setInputValue(String(safeLevel));
+    setInspectedLevel(clampRewardPreviewLevel(safeLevel || 1));
   }
 
   function saveInputLevel() {
@@ -286,7 +488,7 @@ export function BattlePassProgressionPage({
 
   return (
     <>
-      <div className="mt-8 grid gap-6 xl:grid-cols-[1.35fr_0.95fr]">
+      <div className="mt-8 grid gap-6 xl:grid-cols-[minmax(0,1.15fr)_minmax(25rem,1fr)] 2xl:grid-cols-[minmax(0,1.2fr)_minmax(27rem,1fr)]">
         <motion.section
           initial={{ opacity: 0, y: 16 }}
           animate={{ opacity: 1, y: 0 }}
@@ -309,12 +511,12 @@ export function BattlePassProgressionPage({
                     isOriginalStyle ? "text-slate-500" : "text-[var(--tf-muted)]"
                   )}
                 >
-                  Battle Pass status
+                  Progress
                 </div>
                 <div className="mt-4 flex flex-wrap items-end gap-3">
                   <div
                     className={cn(
-                      "whitespace-nowrap font-semibold tracking-tight leading-none",
+                      "min-w-[7.5ch] whitespace-nowrap font-semibold tracking-tight leading-none tabular-nums",
                       levelHeadlineClass,
                       isOriginalStyle
                         ? "text-slate-900"
@@ -331,7 +533,7 @@ export function BattlePassProgressionPage({
 
               <div
                 className={cn(
-                  "inline-flex w-fit items-center gap-2 rounded-full border px-4 py-2 text-sm font-medium shadow-sm",
+                  "inline-flex min-w-[11rem] items-center justify-center gap-2 rounded-full border px-4 py-2 text-center text-sm font-medium shadow-sm",
                   activeBandStyles.chip
                 )}
               >
@@ -342,51 +544,51 @@ export function BattlePassProgressionPage({
 
             <div className="space-y-6">
               <BattlePassProgressRow
-                label="Main pass completion"
+                label="Main Pass"
                 value={`${formatNumber(mainLevelsLeft)} levels left`}
                 progress={mainProgress}
                 footerLeft={`${formatNumber(mainCompletedLevels)} / ${formatNumber(MAIN_TRACK_LEVELS)} levels`}
-                footerRight={`${Math.round(mainProgress)}% complete`}
+                footerRight={`${Math.round(mainProgress)}%`}
                 indicatorClassName="bg-sky-500"
                 trackClassName={progressTrackClass}
               />
 
               <BattlePassProgressRow
-                label="Bonus page completion"
+                label="Bonus"
                 value={
                   battlePassLevel < MAIN_TRACK_LEVELS
-                    ? "Locked until level 97"
+                    ? "Unlocks at level 97"
                     : bonusLevelsLeft === 0
-                      ? "Bonus complete"
+                      ? "Complete"
                       : `${formatNumber(bonusLevelsLeft)} levels left`
                 }
                 progress={bonusProgress}
                 footerLeft={`${formatNumber(bonusCompletedLevels)} / ${formatNumber(BONUS_LEVELS)} bonus levels`}
                 footerRight={
                   battlePassLevel < MAIN_TRACK_LEVELS
-                    ? "Unlocks after main pass"
-                    : `${Math.round(bonusProgress)}% complete`
+                    ? "After main pass"
+                    : `${Math.round(bonusProgress)}%`
                 }
                 indicatorClassName="bg-fuchsia-500"
                 trackClassName={progressTrackClass}
               />
 
               <BattlePassProgressRow
-                label="Overall completion"
-                value={totalLevelsLeft === 0 ? "All levels done" : `${formatNumber(totalLevelsLeft)} levels left`}
+                label="Overall"
+                value={totalLevelsLeft === 0 ? "Complete" : `${formatNumber(totalLevelsLeft)} levels left`}
                 progress={overallProgress}
-                footerLeft={`${formatNumber(battlePassLevel)} / ${formatNumber(TOTAL_TRACKED_LEVELS)} tracked levels`}
-                footerRight={`${Math.round(overallProgress)}% complete`}
+                footerLeft={`${formatNumber(battlePassLevel)} / ${formatNumber(TOTAL_TRACKED_LEVELS)} levels`}
+                footerRight={`${Math.round(overallProgress)}%`}
                 indicatorClassName={activeBandStyles.accent}
                 trackClassName={progressTrackClass}
               />
 
               <BattlePassProgressRow
-                label="Season completion"
+                label="Season"
                 value={`${formatNumber(seasonDaysRemaining)} days left`}
                 progress={seasonElapsedPct}
                 footerLeft={`${formatNumber(elapsedSeasonDays)} days elapsed`}
-                footerRight={`${Math.round(seasonElapsedPct)}% complete`}
+                footerRight={`${Math.round(seasonElapsedPct)}%`}
                 indicatorClassName="bg-slate-900"
                 large
                 trackClassName={progressTrackClass}
@@ -400,39 +602,31 @@ export function BattlePassProgressionPage({
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.08, duration: 0.35 }}
           className={cn(
-            "rounded-[2.25rem] p-6 md:p-8",
+            "w-full min-w-0 rounded-[2.25rem] p-6 md:p-8 xl:min-w-[25rem] 2xl:min-w-[27rem]",
             isOriginalStyle
               ? "border border-white/70 bg-white/80 text-slate-900 shadow-[0_20px_60px_rgba(15,23,42,0.08)] backdrop-blur-xl"
               : "tf-panel text-white"
           )}
         >
-          <div>
-            <div
-              className={cn(
-                "text-sm font-semibold uppercase tracking-[0.22em]",
-                isOriginalStyle ? "text-slate-500" : "text-[var(--tf-muted)]"
-              )}
-            >
-              Level control
+          <div className="flex items-start gap-4">
+            <div>
+              <div
+                className={cn(
+                  "text-sm font-semibold uppercase tracking-[0.22em]",
+                  isOriginalStyle ? "text-slate-500" : "text-[var(--tf-muted)]"
+                )}
+              >
+                Tracker
+              </div>
+              <h2 className="mt-3 text-3xl font-semibold tracking-tight">
+                Set level
+              </h2>
             </div>
-            <h2 className="mt-3 text-3xl font-semibold tracking-tight">
-              Update Battle Pass level
-            </h2>
-            <p
-              className={cn(
-                "mt-3 text-sm leading-6",
-                bodyTextClass
-              )}
-            >
-              Choose your pass type, then use the level you see in game. This
-              page keeps progression tied to level milestones instead of live XP
-              totals.
-            </p>
           </div>
 
           <div
             className={cn(
-              "mt-6 rounded-[1.75rem] border p-5",
+              "mt-6 w-full rounded-[1.75rem] border p-5",
               isOriginalStyle
                 ? "border-slate-200 bg-slate-50/90"
                 : "border-white/10 bg-white/4"
@@ -444,7 +638,7 @@ export function BattlePassProgressionPage({
                 isOriginalStyle ? "text-slate-500" : "text-[var(--tf-muted)]"
               )}
             >
-              Battle Pass type
+              Track
             </div>
             <div className="mt-3 grid grid-cols-3 gap-2">
               {BATTLE_PASS_TRACKS.map((track) => {
@@ -476,10 +670,6 @@ export function BattlePassProgressionPage({
                 );
               })}
             </div>
-            <p className={cn("mt-3 text-sm leading-6", bodyTextClass)}>
-              {selectedTrack.helper}
-            </p>
-
             <label
               htmlFor="battle-pass-level"
               className={cn(
@@ -487,7 +677,7 @@ export function BattlePassProgressionPage({
                 isOriginalStyle ? "text-slate-500" : "text-[var(--tf-muted)]"
               )}
             >
-              Current Battle Pass level
+              Level
             </label>
             <div className="mt-3 flex flex-col gap-3 sm:flex-row">
               <Input
@@ -503,13 +693,13 @@ export function BattlePassProgressionPage({
                   }
                 }}
                 className="tf-input h-12 rounded-2xl text-base"
-                placeholder="Enter level"
+                placeholder="Level"
               />
               <Button
                 onClick={saveInputLevel}
                 className="tf-button-accent h-12 rounded-2xl px-6"
               >
-                Save level
+                Save
               </Button>
             </div>
 
@@ -546,153 +736,414 @@ export function BattlePassProgressionPage({
             : "tf-panel"
         )}
       >
-        <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
-          <div>
+        <div className="space-y-6">
+          <div className="max-w-3xl">
             <div
               className={cn(
                 "text-sm font-semibold uppercase tracking-[0.22em]",
                 isOriginalStyle ? "text-slate-500" : "text-[var(--tf-muted)]"
               )}
             >
-              Progression bands
+              Rewards
             </div>
             <h2 className="mt-2 text-3xl font-semibold tracking-tight">
-              See how the level bands are split up
+              Season 10 Reward Map
             </h2>
-            <p
-              className={cn(
-                "mt-2 max-w-3xl text-sm leading-6",
-                bodyTextClass
-              )}
-            >
-              This mockup uses your current level to map entry, middle, later,
-              and bonus progression without needing to track raw XP every day.
-            </p>
           </div>
 
-          <div className="tf-meta-pill rounded-full px-4 py-2 text-sm text-[var(--tf-cream)]">
-            1,760,000 XP main pass / 500,000 XP bonus
+          <div
+            className={cn(
+              "w-full rounded-[1.9rem] border p-5 md:p-6",
+              isOriginalStyle
+                ? "border-slate-200 bg-white/90"
+                : "border-white/14 bg-[linear-gradient(180deg,rgba(19,20,26,0.98),rgba(10,11,15,0.98))] shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]"
+            )}
+          >
+            <div className="flex flex-col gap-5 md:flex-row md:items-start md:justify-between">
+              <div>
+                <div
+                  className={cn(
+                    "text-xs font-semibold uppercase tracking-[0.18em]",
+                    isOriginalStyle ? "text-slate-500" : "text-[var(--tf-muted)]"
+                  )}
+                >
+                  Selected Level
+                </div>
+                <h3
+                  className={cn(
+                    "mt-2 min-w-[8ch] text-3xl font-semibold tracking-tight tabular-nums",
+                    isOriginalStyle ? "text-slate-900" : "text-[var(--tf-cream)]"
+                  )}
+                >
+                  Level {formatNumber(inspectedLevelData.level)}
+                </h3>
+              </div>
+
+              <div
+                className={cn(
+                  "min-w-[11rem] rounded-full border px-3 py-1.5 text-center text-xs font-semibold uppercase tracking-[0.18em]",
+                  isOriginalStyle
+                    ? BAND_STYLES[inspectedLevelData.band.id].chip
+                    : "border-white/10 bg-white/[0.06] text-[var(--tf-cream)]"
+                )}
+              >
+                {inspectedLevelData.band.label}
+              </div>
+            </div>
+
+            <div className="mt-4 flex flex-wrap items-center gap-2">
+              <div
+                className={cn(
+                  "min-w-[9rem] rounded-full border px-3 py-1.5 text-center text-[0.7rem] font-semibold uppercase tracking-[0.18em]",
+                  isOriginalStyle
+                    ? "border-slate-200 bg-slate-100 text-slate-600"
+                    : "border-white/10 bg-black/20 text-[var(--tf-muted)]"
+                )}
+              >
+                {inspectedLevelData.band.range}
+              </div>
+              <div
+                className={cn(
+                  "min-w-[9rem] rounded-full border px-3 py-1.5 text-center text-[0.7rem] font-semibold uppercase tracking-[0.18em]",
+                  isOriginalStyle
+                    ? "border-rose-200 bg-rose-50 text-rose-700"
+                    : "border-[color:var(--tf-accent)] bg-[rgba(210,31,60,0.12)] text-[var(--tf-white)]"
+                )}
+              >
+                {selectedTrack.rewardsSummary}
+              </div>
+            </div>
+
+            <div className="mt-5 space-y-3">
+              {BATTLE_PASS_REWARD_ROWS.map((row) => {
+                const Icon = row.icon;
+                const reward = inspectedLevelData.rewards[row.id];
+                const hasReward = reward !== null;
+                const isHighlighted = isRewardHighlightedInView(
+                  battlePassTrack,
+                  row.id
+                );
+                const cardClass = !hasReward
+                  ? isOriginalStyle
+                    ? "border-slate-200 bg-slate-50/90 text-slate-500"
+                    : "border-white/10 bg-white/4 text-[var(--tf-muted)]"
+                  : isHighlighted
+                    ? row.activePanelClass
+                    : row.mutedPanelClass;
+                const iconShellClass = !hasReward
+                  ? isOriginalStyle
+                    ? "border-slate-200 bg-white text-slate-400"
+                    : "border-white/10 bg-black/20 text-[var(--tf-muted)]"
+                  : isHighlighted
+                    ? row.activePanelClass
+                    : row.mutedPanelClass;
+
+                return (
+                  <div
+                    key={row.id}
+                    className={cn(
+                      "flex items-start gap-4 rounded-[1.35rem] border p-4",
+                      cardClass
+                    )}
+                  >
+                    {reward ? (
+                      <img
+                        src={reward.imageUrl}
+                        alt={reward.name}
+                        loading="lazy"
+                        referrerPolicy="no-referrer"
+                        className={cn(
+                          "h-16 w-16 shrink-0 rounded-[1rem] border object-cover",
+                          isOriginalStyle
+                            ? "border-slate-200 bg-white"
+                            : "border-white/10 bg-black/20"
+                        )}
+                      />
+                    ) : (
+                      <div
+                        className={cn(
+                          "flex size-11 shrink-0 items-center justify-center rounded-[1rem] border",
+                          iconShellClass
+                        )}
+                      >
+                        <Icon
+                          className={cn(
+                            "h-5 w-5",
+                            hasReward ? row.iconClass : undefined
+                          )}
+                        />
+                      </div>
+                    )}
+
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <div className="text-sm font-semibold uppercase tracking-[0.12em]">
+                          {row.label}
+                        </div>
+                        {reward ? (
+                          <div
+                            className={cn(
+                              "rounded-full border px-2.5 py-1 text-[0.65rem] font-semibold uppercase tracking-[0.18em]",
+                              isHighlighted ? row.activePanelClass : row.mutedPanelClass
+                            )}
+                          >
+                            {reward.rarity}
+                          </div>
+                        ) : null}
+                      </div>
+                      <div className="mt-2 text-base font-semibold leading-6">
+                        {reward ? reward.name : `No ${row.label.toLowerCase()} reward`}
+                      </div>
+                      <div
+                        className={cn(
+                          "mt-1 text-[0.7rem] font-semibold uppercase tracking-[0.18em]",
+                          isOriginalStyle ? "text-slate-500" : "text-[var(--tf-muted)]"
+                        )}
+                      >
+                        {reward ? reward.type : "No unlock"}
+                      </div>
+                      <div className="mt-2 text-sm leading-6">
+                        {reward
+                          ? reward.description
+                          : `No ${row.label.toLowerCase()} reward at this level.`}
+                      </div>
+                    </div>
+
+                    <div
+                      className={cn(
+                        "rounded-full border px-3 py-1 text-[0.65rem] font-semibold uppercase tracking-[0.18em]",
+                        !hasReward
+                          ? isOriginalStyle
+                            ? "border-slate-200 bg-white text-slate-500"
+                            : "border-white/10 bg-black/20 text-[var(--tf-muted)]"
+                          : isHighlighted
+                            ? row.activePanelClass
+                            : row.mutedPanelClass
+                      )}
+                    >
+                      {hasReward ? "Reward" : "None"}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
           </div>
         </div>
 
-        <div className="mt-8 grid gap-5 xl:grid-cols-2">
-          {BATTLE_PASS_BANDS.map((band, index) => {
-            const styles = BAND_STYLES[band.id];
-            const completedLevels = Math.min(
-              Math.max(0, battlePassLevel - band.startCompletedLevel),
-              band.levels
-            );
-            const remainingLevels = Math.max(0, band.levels - completedLevels);
-            const progress = (completedLevels / band.levels) * 100;
-            const isActive =
-              currentBand.id === band.id ||
-              (band.id === "entry" && battlePassLevel === 0);
-            const isComplete = completedLevels === band.levels;
-            const statusLabel = isComplete
-              ? "Complete"
-              : isActive
-                ? "Active"
-                : completedLevels > 0
-                  ? "In progress"
-                  : "Up next";
-
-            return (
-              <motion.article
-                key={band.id}
-                initial={{ opacity: 0, y: 14 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.14 + index * 0.03, duration: 0.3 }}
-                className={cn(
-                  "rounded-[2rem] p-5 md:p-6",
-                  isOriginalStyle
-                    ? "border border-white/70 bg-white/85 shadow-[0_20px_60px_rgba(15,23,42,0.08)] backdrop-blur-xl"
-                    : "tf-panel",
-                  isActive
-                    ? isOriginalStyle
-                      ? "ring-2 ring-slate-200"
-                      : "ring-2 ring-white/20"
-                    : ""
-                )}
-              >
-                <div className="flex items-start justify-between gap-4">
-                  <div>
-                    <div
-                      className={cn(
-                        "text-sm font-semibold uppercase tracking-[0.18em]",
-                        isOriginalStyle ? "text-slate-500" : "text-[var(--tf-muted)]"
-                      )}
-                    >
-                      {band.range}
-                    </div>
-                    <h3 className="mt-2 text-2xl font-semibold tracking-tight text-[var(--tf-cream)]">
-                      {band.label}
-                    </h3>
-                  </div>
-
-                  <div className={cn("rounded-full border px-3 py-1.5 text-sm font-medium", styles.chip)}>
-                    {statusLabel}
-                  </div>
-                </div>
-
-                <div className="mt-5 grid gap-3 sm:grid-cols-2">
-                  <BattlePassMetaCard
-                    label="XP per level"
-                    value={`${formatNumber(band.xpPerLevel)} XP`}
-                    isOriginalStyle={isOriginalStyle}
-                  />
-                  <BattlePassMetaCard
-                    label="Band total"
-                    value={`${formatNumber(band.totalXp)} XP`}
-                    isOriginalStyle={isOriginalStyle}
-                  />
-                </div>
-
+        <div
+          className={cn(
+            "mt-10 rounded-[2rem] border p-4 md:p-6",
+            isOriginalStyle
+              ? "border-slate-200 bg-slate-100/80 shadow-[inset_0_1px_0_rgba(255,255,255,0.72)]"
+              : "border-white/14 bg-[radial-gradient(circle_at_top,rgba(210,31,60,0.14),transparent_42%),linear-gradient(180deg,rgba(16,17,22,0.99),rgba(7,8,11,0.99))] shadow-[inset_0_1px_0_rgba(255,255,255,0.06),0_26px_60px_rgba(0,0,0,0.32)]"
+          )}
+        >
+          <div
+            className="grid gap-x-4 gap-y-5"
+            style={{
+              gridTemplateColumns: rewardMapLayoutColumns,
+            }}
+          >
+            <div
+              className={cn(
+                "pt-1 text-xs font-semibold uppercase tracking-[0.18em]",
+                isOriginalStyle ? "text-slate-500" : "text-[var(--tf-muted)]"
+              )}
+            >
+              Levels
+            </div>
+            <div
+              className="grid min-w-0 items-center gap-2"
+              style={{
+                gridTemplateColumns: rewardMapGridTemplate,
+              }}
+            >
+              {LEVEL_LABEL_MARKS.map((level) => (
                 <div
+                  key={level}
+                  style={{ gridColumnStart: level }}
                   className={cn(
-                    "mt-5 rounded-[1.75rem] border bg-gradient-to-br p-5",
-                    styles.panel,
-                    "border-white/10"
+                    "justify-self-center text-[11px] font-semibold uppercase tracking-[0.12em]",
+                    level <= battlePassLevel
+                      ? isOriginalStyle
+                        ? "text-slate-900"
+                        : "text-[var(--tf-cream)]"
+                      : isOriginalStyle
+                        ? "text-slate-400"
+                        : "text-[var(--tf-muted)]"
                   )}
                 >
-                  <div className="flex items-start justify-between gap-4">
-                    <div>
-                      <div className="text-sm font-medium text-slate-500">Progress in band</div>
-                      <div className={cn("mt-2 text-3xl font-semibold tracking-tight", styles.text)}>
-                        {formatNumber(completedLevels)} / {formatNumber(band.levels)}
-                      </div>
-                      <div className="mt-2 text-sm text-slate-600">
-                        {remainingLevels === 0
-                          ? "This band is finished"
-                          : `${formatNumber(remainingLevels)} levels left in this band`}
-                      </div>
-                    </div>
+                  {level}
+                </div>
+              ))}
+            </div>
 
-                    <div className={cn("rounded-2xl px-4 py-3", styles.soft)}>
-                      <Gift className="h-5 w-5" />
-                    </div>
+            <div className="space-y-4 pt-1">
+              <div className="flex min-h-10 items-center gap-2.5">
+                <div
+                  className={cn(
+                    "flex size-9 shrink-0 items-center justify-center rounded-full border",
+                    isOriginalStyle
+                      ? "border-rose-200 bg-rose-50 text-rose-600"
+                      : "border-[color:var(--tf-accent)] bg-[rgba(210,31,60,0.12)] text-[var(--tf-white)]"
+                  )}
+                >
+                  <Layers3 className="h-4 w-4" />
+                </div>
+                <div>
+                  <div
+                    className={cn(
+                      "text-[0.76rem] font-semibold uppercase leading-none tracking-[0.14em]",
+                      isOriginalStyle ? "text-rose-700" : "text-[var(--tf-white)]"
+                    )}
+                  >
+                    Progress
                   </div>
-
-                  <div className="mt-5">
-                    <div className="mb-2 flex items-center justify-between text-sm text-slate-500">
-                      <span>Completion</span>
-                      <span className="font-medium text-slate-700">
-                        {Math.round(progress)}%
-                      </span>
-                    </div>
-                    <Progress
-                      value={progress}
-                      indicatorClassName={styles.accent}
-                      className={cn("h-3 rounded-full", progressTrackClass ?? "bg-black/18")}
-                    />
-                    <div className="mt-2 flex items-center justify-between text-xs text-slate-500">
-                      <span>Start</span>
-                      <span>{band.range}</span>
-                    </div>
+                  <div
+                    className={cn(
+                      "mt-1 text-[0.55rem] font-semibold uppercase tracking-[0.18em]",
+                      isOriginalStyle
+                        ? "text-slate-400"
+                        : "text-[var(--tf-muted)]"
+                    )}
+                  >
+                    {formatNumber(battlePassLevel)} / {formatNumber(TOTAL_TRACKED_LEVELS)} levels
                   </div>
                 </div>
-              </motion.article>
-            );
-          })}
+              </div>
+
+              {BATTLE_PASS_REWARD_ROWS.map((row) => {
+                const Icon = row.icon;
+                const isHighlighted = includedRewardTracks.includes(row.id);
+
+                return (
+                  <div key={row.id} className="flex min-h-10 items-center gap-2.5">
+                    <div
+                      className={cn(
+                        "flex size-9 shrink-0 items-center justify-center rounded-full border",
+                        isHighlighted
+                          ? row.activePanelClass
+                          : row.mutedPanelClass
+                      )}
+                    >
+                      <Icon className={cn("h-4 w-4", row.iconClass)} />
+                    </div>
+                    <div>
+                      <div
+                        className={cn(
+                          "text-[0.76rem] font-semibold uppercase leading-none tracking-[0.14em]",
+                          isHighlighted
+                            ? row.textClass
+                            : isOriginalStyle
+                              ? "text-slate-500"
+                              : "text-[var(--tf-muted)]"
+                        )}
+                      >
+                        {row.label}
+                      </div>
+                      <div
+                        className={cn(
+                          "mt-1 text-[0.55rem] font-semibold uppercase tracking-[0.18em]",
+                          isOriginalStyle
+                            ? "text-slate-400"
+                            : "text-[var(--tf-muted)]"
+                        )}
+                      >
+                        {row.cadence}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+
+            </div>
+
+            <div className="relative pt-1">
+              <div
+                className={cn(
+                  "pointer-events-none absolute inset-y-0 z-0 rounded-[1rem] border",
+                  isOriginalStyle
+                    ? "border-slate-300 bg-slate-900/5"
+                    : "border-white/18 bg-[rgba(255,255,255,0.08)]"
+                )}
+                style={{
+                  left: inspectedLevelLeft,
+                  width: inspectedLevelWidth,
+                }}
+              />
+
+              <div className="relative z-10 space-y-3">
+                <div
+                  className="grid min-w-0 h-10 items-center gap-2"
+                  style={{
+                    gridTemplateColumns: rewardMapGridTemplate,
+                  }}
+                >
+                  {LEVEL_MARKS.map((level) => (
+                    <div key={`progress-${level}`} className="flex justify-center">
+                      <span
+                        className={getProgressTickClass({
+                          isCompleted: level <= battlePassLevel,
+                          isCurrentLevel: battlePassLevel > 0 && level === battlePassLevel,
+                          isOriginalStyle,
+                        })}
+                      />
+                    </div>
+                  ))}
+                </div>
+
+                {BATTLE_PASS_REWARD_ROWS.map((row) => (
+                  <div
+                    key={row.id}
+                    className="grid min-w-0 h-10 items-center gap-2"
+                    style={{
+                      gridTemplateColumns: rewardMapGridTemplate,
+                    }}
+                  >
+                    {LEVEL_MARKS.map((level) => {
+                      const hasReward = hasBattlePassRewardAtLevel(level, row.id);
+
+                      return (
+                        <div key={`${row.id}-${level}`} className="flex justify-center">
+                          {hasReward ? (
+                            <span
+                              className={getRewardTickClass({
+                                isHighlighted: includedRewardTracks.includes(row.id),
+                                isSelected: inspectedLevel === level,
+                                activeTickClass: row.activeTickClass,
+                                mutedTickClass: row.mutedTickClass,
+                              })}
+                            />
+                          ) : null}
+                        </div>
+                      );
+                    })}
+                  </div>
+                ))}
+              </div>
+
+              <div
+                className="absolute inset-0 z-20 grid"
+                style={{
+                  gridTemplateColumns: rewardMapGridTemplate,
+                  gridTemplateRows: "1fr",
+                }}
+              >
+                {LEVEL_MARKS.map((level) => (
+                  <button
+                    key={level}
+                    type="button"
+                    className="h-full w-full cursor-pointer bg-transparent"
+                    onMouseEnter={() => setInspectedLevel(level)}
+                    onFocus={() => setInspectedLevel(level)}
+                    onClick={() => setInspectedLevel(level)}
+                    title={`Level ${level}`}
+                    aria-label={`Inspect level ${level}. ${getRewardPreviewCopy(level, "premium")}. ${getRewardPreviewCopy(level, "free")}. ${getRewardPreviewCopy(level, "ultimate")}.`}
+                  />
+                ))}
+              </div>
+            </div>
+          </div>
         </div>
       </motion.section>
     </>
@@ -722,7 +1173,9 @@ function BattlePassProgressRow({
     <div>
       <div className="mb-2 flex items-center justify-between gap-3 text-sm text-[var(--tf-muted)]">
         <span>{label}</span>
-        <span className="font-medium text-[var(--tf-cream)]">{value}</span>
+        <span className="min-w-[10.5rem] text-right font-medium tabular-nums text-[var(--tf-cream)]">
+          {value}
+        </span>
       </div>
       <Progress
         value={progress}
@@ -730,46 +1183,8 @@ function BattlePassProgressRow({
         className={cn("tf-progress-track rounded-full", large ? "h-4" : "h-3", trackClassName)}
       />
       <div className="mt-2 flex items-center justify-between text-xs text-[var(--tf-muted)]">
-        <span>{footerLeft}</span>
-        <span>{footerRight}</span>
-      </div>
-    </div>
-  );
-}
-
-function BattlePassMetaCard({
-  label,
-  value,
-  isOriginalStyle,
-}: {
-  label: string;
-  value: string;
-  isOriginalStyle: boolean;
-}) {
-  return (
-    <div
-      className={cn(
-        "rounded-[1.35rem] border px-4 py-3",
-        isOriginalStyle
-          ? "border-slate-200 bg-slate-50/90"
-          : "border-white/10 bg-white/4"
-      )}
-    >
-      <div
-        className={cn(
-          "text-xs font-semibold uppercase tracking-[0.18em]",
-          isOriginalStyle ? "text-slate-500" : "text-[var(--tf-muted)]"
-        )}
-      >
-        {label}
-      </div>
-      <div
-        className={cn(
-          "mt-2 text-lg font-semibold tracking-tight",
-          isOriginalStyle ? "text-slate-900" : "text-[var(--tf-cream)]"
-        )}
-      >
-        {value}
+        <span className="tabular-nums">{footerLeft}</span>
+        <span className="min-w-[6rem] text-right tabular-nums">{footerRight}</span>
       </div>
     </div>
   );

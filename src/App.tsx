@@ -48,6 +48,7 @@ const RANKS = [
 const TOTAL_POINTS = 2400;
 const STORAGE_KEY = "wt-progress-tracker-state";
 const STYLE_MODE_STORAGE_KEY = "wt-progress-style-mode";
+const REPO_URL = "https://github.com/junga3/wt-progress";
 const SEASON_DAY_TIMER_OFFSET = -1;
 const SEASON_START = new Date("2026-03-26T00:00:00");
 const LIGHT_PROGRESS_TRACK_CLASS =
@@ -216,6 +217,19 @@ function getSiteFromPathname(pathname: string): SiteId {
 function daysBetween(a: Date, b: Date) {
   const oneDay = 1000 * 60 * 60 * 24;
   return Math.max(1, Math.ceil((b.getTime() - a.getTime()) / oneDay));
+}
+
+function GitHubMark({ className }: { className?: string }) {
+  return (
+    <svg
+      aria-hidden="true"
+      viewBox="0 0 16 16"
+      fill="currentColor"
+      className={className}
+    >
+      <path d="M8 0C3.58 0 0 3.58 0 8a8 8 0 0 0 5.47 7.59c.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.5-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82a7.5 7.5 0 0 1 4 0c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .22.15.47.55.39A8 8 0 0 0 16 8c0-4.42-3.58-8-8-8Z" />
+    </svg>
+  );
 }
 
 function getDaysRemaining(endDate: Date) {
@@ -930,9 +944,7 @@ export default function WTProgressAppleRedesign() {
                     className={cn(
                       "w-full rounded-[1.1rem] px-4 py-3 text-center text-sm font-medium transition",
                       matchMode === mode.id
-                        ? isOriginalStyle
-                          ? "bg-slate-900 text-white shadow-sm"
-                          : "bg-[linear-gradient(90deg,var(--tf-accent-strong),var(--tf-accent))] text-white shadow-sm"
+                        ? "bg-[linear-gradient(90deg,var(--tf-accent-strong),var(--tf-accent))] text-white shadow-sm"
                         : isOriginalStyle
                           ? "text-slate-500 hover:bg-slate-100 hover:text-slate-900"
                           : "text-[var(--tf-muted)] hover:bg-white/6 hover:text-[var(--tf-cream)]"
@@ -951,9 +963,7 @@ export default function WTProgressAppleRedesign() {
                     className={cn(
                       "rounded-[1.5rem] border px-5 py-5 text-left transition hover:-translate-y-0.5 hover:shadow-md",
                       button.emphasis
-                        ? isOriginalStyle
-                          ? "border-slate-900 bg-slate-900 text-white"
-                          : "border-[var(--tf-accent)] bg-[linear-gradient(135deg,var(--tf-accent-strong),var(--tf-accent))] text-white"
+                        ? "border-[var(--tf-accent)] bg-[linear-gradient(135deg,var(--tf-accent-strong),var(--tf-accent))] text-white"
                         : isOriginalStyle
                           ? "border-slate-200 bg-white text-slate-900"
                           : "border-white/10 bg-white/4 text-[var(--tf-cream)]"
@@ -1191,6 +1201,23 @@ export default function WTProgressAppleRedesign() {
           />
         )}
       </div>
+
+      <a
+        href={REPO_URL}
+        target="_blank"
+        rel="noreferrer"
+        aria-label="Open the GitHub repository"
+        title="Open the GitHub repository"
+        className={cn(
+          "fixed bottom-4 right-4 z-50 inline-flex items-center gap-2 rounded-full border px-3 py-3 text-sm font-semibold uppercase tracking-[0.18em] transition sm:bottom-6 sm:right-6 sm:px-4",
+          isOriginalStyle
+            ? "border-slate-200/90 bg-white/95 text-slate-700 shadow-[0_18px_45px_rgba(15,23,42,0.14)] backdrop-blur-xl hover:border-slate-300 hover:bg-white hover:text-slate-950"
+            : "border-white/12 bg-[rgba(12,13,16,0.92)] text-[var(--tf-cream)] shadow-[0_20px_50px_rgba(0,0,0,0.42)] backdrop-blur-xl hover:border-[color:var(--tf-accent)] hover:bg-[rgba(210,31,60,0.16)] hover:text-[var(--tf-white)]"
+        )}
+      >
+        <GitHubMark className="h-5 w-5 shrink-0" />
+        <span className="hidden sm:inline">GitHub</span>
+      </a>
     </div>
   );
 }
