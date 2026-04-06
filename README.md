@@ -106,6 +106,14 @@ Current version: `0.4`
 
 Each page is live, mobile-friendly, saved in local storage, and available in both light and dark mode.
 
+## Future Plans
+
+- Add a proper landing page with the new brand, clearer page cards, and a stronger "pick your tracker" entry flow.
+- Make the Battle Pass page responsive enough to feel great on mobile, not just workable.
+- Add a player-card style profile summary that combines World Tour, badges, and Battle Pass into one overview.
+- Add challenge and event trackers for limited-time contracts or weekly goals.
+- Add a collection tracker for cosmetics, sponsor gear, or reward unlocks.
+
 ## Feature Breakdown
 
 ### World Tour progress companion
