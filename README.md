@@ -1,20 +1,98 @@
-# WT Progress
+# Contestant Companion
 
-WT Progress is a lightweight THE FINALS companion site focused on long-term progression tracking. It gives players a cleaner alternative to spreadsheets by turning seasonal progress, badge milestones, and Battle Pass progress into simple page-level dashboards with local save state.
+Contestant Companion is a lightweight THE FINALS companion site focused on long-term progression tracking. It gives players a cleaner alternative to spreadsheets by turning seasonal progress, badge milestones, and Battle Pass progress into simple page-level dashboards with local save state.
 
 Live site: [https://junga3.github.io/wt-progress/](https://junga3.github.io/wt-progress/)
 
-## Latest Update
+## Patch Notes
 
-### April 6, 2026
+### `0.4` - April 6, 2026
 
-- Rebuilt the `Battle Pass Progression` page around a single level-based reward map instead of split level bands.
-- Added the live Season 10 reward set for `Free`, `Premium`, and `Ultimate`, including per-level inspection, hover and tap previews, muted non-selected tracks, and higher-contrast reward ticks.
-- Polished the Battle Pass tracker layout so the right rail stays stable, the reward map uses more of the page width, and the interface no longer shifts when levels change quickly.
-- Added a floating GitHub repo button to the shared app shell so it stays fixed at the bottom-right corner across every page.
-- Updated the `World Tour progress companion` light mode so the active match mode and highlighted result card use the same red accent treatment as dark mode.
-- Updated the `Statistics Badge Progression` stat entry typography to better match the in-game player card treatment.
+Merged `codex/april-6-ui-polish` into `main` in [`6abf987`](https://github.com/junga3/wt-progress/commit/6abf9875d9db18d0b4ff10e0a18451472b0b0ede).
+
+**New Features**
+
+- Added live Season 10 Battle Pass reward data for `Free`, `Premium`, and `Ultimate`.
+- Added per-level reward inspection for the full Battle Pass track with hover and tap support.
+- Added a floating GitHub repo button that stays fixed to the bottom-right corner on every page.
+
+**Gameplay UI Updates**
+
+- Reworked `Battle Pass Progression` from split level bands into a single aligned reward map.
+- Replaced the old Battle Pass progress presentation with level ticks and per-track reward rows.
+- Updated the Battle Pass track selector so non-selected reward lines stay visible in muted colors.
+- Updated the `World Tour progress companion` light mode so active match selections and featured result cards use the same red accent treatment as dark mode.
+- Updated the `Statistics Badge Progression` stat-entry typography to better match THE FINALS player card styling.
+
+**Polish**
+
+- Improved Battle Pass tracker sizing so the right rail has a more stable width.
+- Improved reward-map contrast so active and muted ticks are easier to read.
+- Removed empty reward-tier placeholders from Battle Pass rows when no reward exists at that level.
+- Locked changing tracker values to steadier widths so rapid level updates do not cause layout jitter.
+
+**Technical**
+
 - Cleaned up the shared `Button` export so lint and production builds pass cleanly.
+
+### `0.3` - April 5, 2026
+
+Merged `codex/readme-favicon-progress` into `main` in [`ba79fde`](https://github.com/junga3/wt-progress/commit/ba79fde6cab5b5e83dc25432c9e53fc3a8cf140f).
+
+**New Features**
+
+- Added the site favicon and supporting branded image assets.
+
+**Gameplay UI Updates**
+
+- Refined the `Battle Pass Progression` page after launch with additional visual and layout tuning.
+- Refreshed shared app styling to better support the growing multi-page companion site.
+
+**Polish**
+
+- Updated project presentation and README copy to better match the live app.
+- Smoothed out post-launch Battle Pass page presentation and readability.
+
+### `0.2` - April 5, 2026
+
+Merged `codex/battle-pass-dark-mode-icons` into `main` in [`d754252`](https://github.com/junga3/wt-progress/commit/d7542521dcd9a50adf403d713289fc1b0936f465).
+
+**New Features**
+
+- Added the `Battle Pass Progression` page as the app's third major tracker.
+- Added the full statistics badge art set for wins, eliminations, revives, and cash progression.
+- Added dark mode support and shared theme updates across the app.
+
+**Gameplay UI Updates**
+
+- Refreshed the `Statistics Badge Progression` page with badge-driven presentation updates.
+- Expanded routing and app navigation to support the new Battle Pass surface.
+- Updated dropdown and page icon treatments to support the broader app shell.
+
+**Polish**
+
+- Aligned season timer behavior and related progress timing details.
+- Improved the overall multi-page feel of the app as it moved beyond the original World Tour tracker.
+
+### `0.1` - April 1, 2026
+
+Merged `world-tour-ui-polish` into `main` in [`c6b1e4b`](https://github.com/junga3/wt-progress/commit/c6b1e4b3de9237fe3f171c10e8067352d2856d37).
+
+**New Features**
+
+- Shipped the first polished routed version of Contestant Companion.
+- Added the `Statistics Badge Progression` page.
+- Added GitHub Pages route recovery through `public/404.html` for direct links.
+
+**Gameplay UI Updates**
+
+- Reworked the `World Tour progress companion` UI into the current page-level tracker experience.
+- Added the shared routed app shell for switching between companion pages.
+
+**Polish**
+
+- Refreshed the README and live-site documentation.
+- Prepared the app shell and routing flow for deployment on GitHub Pages.
 
 ## Current App Progress
 
@@ -23,6 +101,8 @@ The app currently ships with three routed tools:
 - `World Tour progress companion`
 - `Statistics Badge Progression`
 - `Battle Pass Progression`
+
+Current version: `0.4`
 
 Each page is live, mobile-friendly, saved in local storage, and available in both light and dark mode.
 
