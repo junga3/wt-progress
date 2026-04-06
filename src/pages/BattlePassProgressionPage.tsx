@@ -1,6 +1,16 @@
 import { useEffect, useMemo, useState } from "react";
-import { motion } from "framer-motion";
-import { Crown, Gift, Layers3, Star } from "lucide-react";
+import { AnimatePresence, motion } from "framer-motion";
+import {
+  ChevronDown,
+  ChevronRight,
+  Crown,
+  Gift,
+  Layers3,
+  PanelBottomOpen,
+  Star,
+  Target,
+  X,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
@@ -165,9 +175,6 @@ const BAND_STYLES: Record<
 };
 
 const LEVEL_MARKS = Array.from({ length: TOTAL_TRACKED_LEVELS }, (_, index) => index + 1);
-const LEVEL_LABEL_MARKS = LEVEL_MARKS.filter(
-  (level) => level % 10 === 0 || level === TOTAL_TRACKED_LEVELS
-);
 const TRACKS_VISIBLE_BY_PASS: Record<BattlePassTrack, BattlePassTrack[]> = {
   free: ["free"],
   premium: ["free", "premium"],
@@ -239,6 +246,95 @@ const BATTLE_PASS_REWARD_ROWS = [
     iconClass: "text-[#ff7f97]",
   },
 ];
+
+type BattlePassRangeGroup = {
+  id: string;
+  label: string;
+  shortLabel: string;
+  description: string;
+  start: number;
+  end: number;
+};
+
+type BattlePassLevelRowData = {
+  level: number;
+  band: ReturnType<typeof getBandForLevel>;
+  rewards: BattlePassLevelRewards;
+};
+
+type BattlePassRangeGroupData = BattlePassRangeGroup & {
+  bandId: BattlePassBandId;
+  completedLevels: number;
+  progress: number;
+  rewardCounts: Record<BattlePassTrack, number>;
+  statusLabel: string;
+  levels: BattlePassLevelRowData[];
+};
+
+const BATTLE_PASS_RANGE_GROUPS: BattlePassRangeGroup[] = [
+  {
+    id: "range-1-16",
+    label: "Entry 1-16",
+    shortLabel: "1-16",
+    description: "Opening rewards",
+    start: 1,
+    end: 16,
+  },
+  {
+    id: "range-17-32",
+    label: "Entry 17-32",
+    shortLabel: "17-32",
+    description: "Closing the opening run",
+    start: 17,
+    end: 32,
+  },
+  {
+    id: "range-33-48",
+    label: "Middle 33-48",
+    shortLabel: "33-48",
+    description: "Mid-pass spotlight rewards",
+    start: 33,
+    end: 48,
+  },
+  {
+    id: "range-49-64",
+    label: "Middle 49-64",
+    shortLabel: "49-64",
+    description: "Mid-pass finishers",
+    start: 49,
+    end: 64,
+  },
+  {
+    id: "range-65-80",
+    label: "Later 65-80",
+    shortLabel: "65-80",
+    description: "Late-pass power picks",
+    start: 65,
+    end: 80,
+  },
+  {
+    id: "range-81-96",
+    label: "Later 81-96",
+    shortLabel: "81-96",
+    description: "Late-pass finish line",
+    start: 81,
+    end: 96,
+  },
+  {
+    id: "range-97-106",
+    label: "Bonus 97-106",
+    shortLabel: "97-106",
+    description: "Bonus pages",
+    start: 97,
+    end: 106,
+  },
+];
+
+const TRACK_PRIORITY_BY_VIEW: Record<BattlePassTrack, BattlePassTrack[]> = {
+  free: ["free", "premium", "ultimate"],
+  premium: ["premium", "free", "ultimate"],
+  ultimate: ["ultimate", "premium", "free"],
+};
 
 function clampLevel(value: number) {
   return Math.min(TOTAL_TRACKED_LEVELS, Math.max(0, Math.round(value)));
@@ -340,10 +436,6 @@ function getBattlePassRewardAtLevel(level: number, track: BattlePassTrack) {
   return SEASON_10_REWARD_LOOKUP.get(clampRewardPreviewLevel(level))?.[track] ?? null;
 }
 
-function hasBattlePassRewardAtLevel(level: number, track: BattlePassTrack) {
-  return getBattlePassRewardAtLevel(level, track) !== null;
-}
-
 function isRewardHighlightedInView(
   selectedTrack: BattlePassTrack,
   rewardTrack: BattlePassTrack
@@ -351,54 +443,65 @@ function isRewardHighlightedInView(
   return TRACKS_VISIBLE_BY_PASS[selectedTrack].includes(rewardTrack);
 }
 
-function getRewardTickClass({
-  isHighlighted,
-  isSelected,
-  activeTickClass,
-  mutedTickClass,
-}: {
-  isHighlighted: boolean;
-  isSelected: boolean;
-  activeTickClass: string;
-  mutedTickClass: string;
-}) {
-  return cn(
-    "block h-4 w-[80%] rounded-full transition-all duration-150",
-    isHighlighted ? activeTickClass : mutedTickClass,
-    isSelected ? "scale-y-[1.35]" : "scale-y-100"
+function getRewardTrackMeta(track: BattlePassTrack) {
+  return BATTLE_PASS_REWARD_ROWS.find((row) => row.id === track) ?? BATTLE_PASS_REWARD_ROWS[0];
+}
+
+function getRangeGroupForLevel(level: number) {
+  const safeLevel = clampRewardPreviewLevel(level);
+
+  return (
+    BATTLE_PASS_RANGE_GROUPS.find(
+      (group) => safeLevel >= group.start && safeLevel <= group.end
+    ) ?? BATTLE_PASS_RANGE_GROUPS[0]
   );
 }
 
-function getRewardPreviewCopy(level: number, track: BattlePassTrack) {
-  const reward = getBattlePassRewardAtLevel(level, track);
+function getPrimaryRewardForLevel(
+  rewards: BattlePassLevelRewards,
+  selectedTrack: BattlePassTrack
+) {
+  for (const track of TRACK_PRIORITY_BY_VIEW[selectedTrack]) {
+    const reward = rewards[track];
 
-  if (!reward) {
-    return `No ${track} reward at this level`;
+    if (reward) {
+      return { track, reward };
+    }
   }
 
-  return `${reward.name}, ${reward.rarity} ${reward.type}`;
+  return null;
 }
 
-function getProgressTickClass({
-  isCompleted,
-  isCurrentLevel,
-  isOriginalStyle,
-}: {
-  isCompleted: boolean;
-  isCurrentLevel: boolean;
-  isOriginalStyle: boolean;
-}) {
-  return cn(
-    "block h-4 w-[80%] rounded-full transition-all duration-150",
-    isCompleted
-      ? isOriginalStyle
-        ? "bg-rose-500 shadow-[0_0_0_1px_rgba(244,63,94,0.22),0_0_18px_rgba(244,63,94,0.2)]"
-        : "bg-[#ff4568] shadow-[0_0_0_1px_rgba(255,69,104,0.28),0_0_22px_rgba(255,69,104,0.3)]"
-      : isOriginalStyle
-        ? "border border-dashed border-slate-300 bg-slate-200/70"
-        : "border border-dashed border-white/18 bg-white/[0.1]",
-    isCurrentLevel ? "scale-y-[1.35]" : "scale-y-100"
-  );
+function getNextRewardForTrack(level: number, track: BattlePassTrack) {
+  for (
+    let nextLevel = Math.max(1, Math.min(TOTAL_TRACKED_LEVELS, level + 1));
+    nextLevel <= TOTAL_TRACKED_LEVELS;
+    nextLevel += 1
+  ) {
+    const reward = getBattlePassRewardAtLevel(nextLevel, track);
+
+    if (reward) {
+      return {
+        level: nextLevel,
+        levelsAway: nextLevel - level,
+        reward,
+      };
+    }
+  }
+
+  return null;
+}
+
+function getLevelStatus(level: number, currentLevel: number) {
+  if (currentLevel > 0 && level < currentLevel) {
+    return "claimed" as const;
+  }
+
+  if (currentLevel > 0 && level === currentLevel) {
+    return "current" as const;
+  }
+
+  return "upcoming" as const;
 }
 
 export function BattlePassProgressionPage({
@@ -413,6 +516,10 @@ export function BattlePassProgressionPage({
   const [inspectedLevel, setInspectedLevel] = useState(() =>
     clampRewardPreviewLevel(initialSavedState.battlePassLevel || 1)
   );
+  const [activeRangeId, setActiveRangeId] = useState(() =>
+    getRangeGroupForLevel(initialSavedState.battlePassLevel || 1).id
+  );
+  const [isMobileDetailOpen, setIsMobileDetailOpen] = useState(false);
   const isOriginalStyle = styleMode === "original";
   const progressTrackClass = isOriginalStyle ? undefined : LIGHT_PROGRESS_TRACK_CLASS;
   const battlePassLevel = savedState.battlePassLevel;
@@ -448,13 +555,17 @@ export function BattlePassProgressionPage({
   const bonusLevelsLeft = Math.max(0, BONUS_LEVELS - bonusCompletedLevels);
   const totalLevelsLeft = Math.max(0, TOTAL_TRACKED_LEVELS - battlePassLevel);
   const includedRewardTracks = TRACKS_VISIBLE_BY_PASS[battlePassTrack];
-  const rewardMapGridTemplate = `repeat(${TOTAL_TRACKED_LEVELS}, minmax(0, 1fr))`;
-  const rewardMapLayoutColumns = "clamp(72px, 8vw, 88px) minmax(0, 1fr)";
-  const inspectedLevelLeft = `${((inspectedLevel - 1) / TOTAL_TRACKED_LEVELS) * 100}%`;
-  const inspectedLevelWidth = `${100 / TOTAL_TRACKED_LEVELS}%`;
+  const nextRewards = useMemo(
+    () =>
+      TRACK_PRIORITY_BY_VIEW[battlePassTrack].map((track) => ({
+        track,
+        data: getNextRewardForTrack(battlePassLevel, track),
+      })),
+    [battlePassLevel, battlePassTrack]
+  );
 
   const levelRewardMap = useMemo(
-    () =>
+    (): BattlePassLevelRowData[] =>
       LEVEL_MARKS.map((level) => ({
         level,
         band: getBandForLevel(level),
@@ -472,12 +583,48 @@ export function BattlePassProgressionPage({
       levelRewardMap[0],
     [inspectedLevel, levelRewardMap]
   );
+  const rangeGroups = useMemo(
+    (): BattlePassRangeGroupData[] =>
+      BATTLE_PASS_RANGE_GROUPS.map((group) => {
+        const levels = levelRewardMap.filter(
+          (item) => item.level >= group.start && item.level <= group.end
+        );
+        const completedLevels =
+          battlePassLevel < group.start
+            ? 0
+            : Math.min(battlePassLevel, group.end) - group.start + 1;
+        const totalLevels = group.end - group.start + 1;
+
+        return {
+          ...group,
+          bandId: getBandForLevel(group.start).id,
+          completedLevels,
+          progress: (completedLevels / totalLevels) * 100,
+          rewardCounts: {
+            free: levels.filter((item) => item.rewards.free).length,
+            premium: levels.filter((item) => item.rewards.premium).length,
+            ultimate: levels.filter((item) => item.rewards.ultimate).length,
+          },
+          statusLabel:
+            battlePassLevel > group.end
+              ? "Complete"
+              : battlePassLevel >= group.start
+                ? "Active"
+                : group.start > MAIN_TRACK_LEVELS && battlePassLevel < MAIN_TRACK_LEVELS
+                  ? "Locked"
+                  : "Up Next",
+          levels,
+        };
+      }),
+    [battlePassLevel, levelRewardMap]
+  );
 
   function applyLevel(nextLevel: number) {
     const safeLevel = clampLevel(nextLevel);
     setSavedState((currentState) => ({ ...currentState, battlePassLevel: safeLevel }));
     setInputValue(String(safeLevel));
     setInspectedLevel(clampRewardPreviewLevel(safeLevel || 1));
+    setActiveRangeId(getRangeGroupForLevel(safeLevel || 1).id);
   }
 
   function saveInputLevel() {
@@ -486,9 +633,89 @@ export function BattlePassProgressionPage({
     applyLevel(parsed);
   }
 
+  function focusTracker() {
+    if (typeof document === "undefined") return;
+    document.getElementById("battle-pass-tracker")?.scrollIntoView({
+      behavior: "smooth",
+      block: "start",
+    });
+  }
+
+  function focusRange(rangeId: string) {
+    setActiveRangeId(rangeId);
+
+    if (typeof document === "undefined") return;
+    document.getElementById(rangeId)?.scrollIntoView({
+      behavior: "smooth",
+      block: "start",
+    });
+  }
+
+  function inspectLevel(level: number, rangeId: string) {
+    setInspectedLevel(level);
+    setActiveRangeId(rangeId);
+
+    if (typeof window !== "undefined" && window.innerWidth < 1280) {
+      setIsMobileDetailOpen(true);
+    }
+  }
+
   return (
     <>
-      <div className="mt-8 grid gap-6 xl:grid-cols-[minmax(0,1.15fr)_minmax(25rem,1fr)] 2xl:grid-cols-[minmax(0,1.2fr)_minmax(27rem,1fr)]">
+      <div className="mt-6 xl:hidden">
+        <div
+          className={cn(
+            "sticky top-4 z-20 rounded-[1.45rem] border px-4 py-3 shadow-[0_16px_40px_rgba(15,23,42,0.08)] backdrop-blur-xl",
+            isOriginalStyle
+              ? "border-white/70 bg-white/92 text-slate-900"
+              : "border-white/12 bg-[rgba(10,11,15,0.92)] text-[var(--tf-cream)]"
+          )}
+        >
+          <div className="flex items-center justify-between gap-3">
+            <div className="min-w-0">
+              <div
+                className={cn(
+                  "text-[0.68rem] font-semibold uppercase tracking-[0.18em]",
+                  isOriginalStyle ? "text-slate-500" : "text-[var(--tf-muted)]"
+                )}
+              >
+                Battle Pass
+              </div>
+              <div className="mt-1 flex flex-wrap items-center gap-2">
+                <span className="text-lg font-semibold tracking-tight">
+                  Level {formatNumber(battlePassLevel)}
+                </span>
+                <span
+                  className={cn(
+                    "rounded-full border px-2.5 py-1 text-[0.65rem] font-semibold uppercase tracking-[0.18em]",
+                    isOriginalStyle
+                      ? "border-rose-200 bg-rose-50 text-rose-700"
+                      : "border-[color:var(--tf-accent)] bg-[rgba(210,31,60,0.14)] text-[var(--tf-white)]"
+                  )}
+                >
+                  {selectedTrack.label}
+                </span>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={focusTracker}
+              className={cn(
+                "inline-flex shrink-0 items-center gap-2 rounded-full border px-3 py-2 text-xs font-semibold uppercase tracking-[0.18em] transition",
+                isOriginalStyle
+                  ? "border-slate-200 bg-slate-50 text-slate-700 hover:border-slate-300 hover:bg-white"
+                  : "border-white/12 bg-white/[0.04] text-[var(--tf-cream)] hover:bg-white/[0.08]"
+              )}
+            >
+              <PanelBottomOpen className="h-4 w-4" />
+              Edit
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div className="mt-8 grid gap-6 xl:grid-cols-[minmax(0,1.25fr)_minmax(22rem,0.75fr)]">
         <motion.section
           initial={{ opacity: 0, y: 16 }}
           animate={{ opacity: 1, y: 0 }}
@@ -540,6 +767,50 @@ export function BattlePassProgressionPage({
                 <Layers3 className="h-4 w-4" />
                 {currentBand.label}
               </div>
+            </div>
+
+            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+              <BattlePassOverviewCard
+                label="Current Band"
+                value={currentBand.label}
+                body={currentBand.subtitle}
+                isOriginalStyle={isOriginalStyle}
+              />
+              <BattlePassOverviewCard
+                label="Track View"
+                value={selectedTrack.label}
+                body={selectedTrack.rewardsSummary}
+                isOriginalStyle={isOriginalStyle}
+                valueClassName={isOriginalStyle ? "text-rose-700" : "text-[var(--tf-white)]"}
+              />
+              <BattlePassOverviewCard
+                label="Next Checkpoint"
+                value={currentBand.nextCheckpoint}
+                body={
+                  currentBand.levelsLeftInBand === 0
+                    ? "Everything in this band is complete."
+                    : `${formatNumber(currentBand.levelsLeftInBand)} levels left in ${currentBand.label.toLowerCase()}.`
+                }
+                isOriginalStyle={isOriginalStyle}
+              />
+              <BattlePassOverviewCard
+                label="Levels Left"
+                value={totalLevelsLeft === 0 ? "Complete" : `${formatNumber(totalLevelsLeft)} left`}
+                body={`${formatNumber(battlePassLevel)} / ${formatNumber(TOTAL_TRACKED_LEVELS)} levels claimed`}
+                isOriginalStyle={isOriginalStyle}
+              />
+            </div>
+
+            <div className="grid gap-4 md:grid-cols-3">
+              {nextRewards.map(({ track, data }) => (
+                <BattlePassNextRewardCard
+                  key={track}
+                  track={track}
+                  nextReward={data}
+                  isOriginalStyle={isOriginalStyle}
+                  isActiveView={track === battlePassTrack}
+                />
+              ))}
             </div>
 
             <div className="space-y-6">
@@ -601,8 +872,9 @@ export function BattlePassProgressionPage({
           initial={{ opacity: 0, y: 16 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.08, duration: 0.35 }}
+          id="battle-pass-tracker"
           className={cn(
-            "w-full min-w-0 rounded-[2.25rem] p-6 md:p-8 xl:min-w-[25rem] 2xl:min-w-[27rem]",
+            "w-full min-w-0 rounded-[2.25rem] p-6 md:p-8 xl:sticky xl:top-24 xl:h-fit",
             isOriginalStyle
               ? "border border-white/70 bg-white/80 text-slate-900 shadow-[0_20px_60px_rgba(15,23,42,0.08)] backdrop-blur-xl"
               : "tf-panel text-white"
@@ -720,8 +992,27 @@ export function BattlePassProgressionPage({
                 </button>
               ))}
             </div>
-          </div>
 
+            <button
+              type="button"
+              onClick={() => {
+                if (typeof document === "undefined") return;
+                document.getElementById("battle-pass-browse")?.scrollIntoView({
+                  behavior: "smooth",
+                  block: "start",
+                });
+              }}
+              className={cn(
+                "mt-4 inline-flex w-full items-center justify-center gap-2 rounded-[1rem] border px-4 py-3 text-sm font-semibold uppercase tracking-[0.16em] transition",
+                isOriginalStyle
+                  ? "border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:bg-slate-100"
+                  : "border-white/12 bg-white/[0.05] text-[var(--tf-cream)] hover:bg-white/[0.08]"
+              )}
+            >
+              Browse rewards
+              <ChevronRight className="h-4 w-4" />
+            </button>
+          </div>
         </motion.aside>
       </div>
 
@@ -729,6 +1020,7 @@ export function BattlePassProgressionPage({
         initial={{ opacity: 0, y: 16 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.12, duration: 0.35 }}
+        id="battle-pass-browse"
         className={cn(
           "mt-8 rounded-[2.25rem] p-6 md:p-8",
           isOriginalStyle
@@ -736,7 +1028,7 @@ export function BattlePassProgressionPage({
             : "tf-panel"
         )}
       >
-        <div className="space-y-6">
+        <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
           <div className="max-w-3xl">
             <div
               className={cn(
@@ -744,409 +1036,758 @@ export function BattlePassProgressionPage({
                 isOriginalStyle ? "text-slate-500" : "text-[var(--tf-muted)]"
               )}
             >
-              Rewards
+              Browse Rewards
             </div>
             <h2 className="mt-2 text-3xl font-semibold tracking-tight">
-              Season 10 Reward Map
+              All 106 levels, chunked for every screen
             </h2>
+            <p
+              className={cn(
+                "mt-3 max-w-2xl text-sm leading-7",
+                isOriginalStyle ? "text-slate-600" : "text-[var(--tf-muted)]"
+              )}
+            >
+              Scan progression in compact ranges, tap any level for full reward details, and keep every track readable on both phone and desktop.
+            </p>
           </div>
+          <div className="flex snap-x gap-2 overflow-x-auto pb-1">
+            {rangeGroups.map((range) => {
+              const rangeStyles = BAND_STYLES[range.bandId];
+              const isActive = activeRangeId === range.id;
 
-          <div
-            className={cn(
-              "w-full rounded-[1.9rem] border p-5 md:p-6",
-              isOriginalStyle
-                ? "border-slate-200 bg-white/90"
-                : "border-white/14 bg-[linear-gradient(180deg,rgba(19,20,26,0.98),rgba(10,11,15,0.98))] shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]"
-            )}
-          >
-            <div className="flex flex-col gap-5 md:flex-row md:items-start md:justify-between">
-              <div>
-                <div
+              return (
+                <button
+                  key={range.id}
+                  type="button"
+                  onClick={() => focusRange(range.id)}
                   className={cn(
-                    "text-xs font-semibold uppercase tracking-[0.18em]",
-                    isOriginalStyle ? "text-slate-500" : "text-[var(--tf-muted)]"
+                    "snap-start whitespace-nowrap rounded-full border px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] transition",
+                    isActive
+                      ? isOriginalStyle
+                        ? rangeStyles.chip
+                        : "border-[color:var(--tf-accent)] bg-[rgba(210,31,60,0.14)] text-[var(--tf-white)]"
+                      : isOriginalStyle
+                        ? "border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50"
+                        : "border-white/10 bg-white/[0.04] text-[var(--tf-muted)] hover:bg-white/[0.08] hover:text-[var(--tf-cream)]"
                   )}
                 >
-                  Selected Level
-                </div>
-                <h3
-                  className={cn(
-                    "mt-2 min-w-[8ch] text-3xl font-semibold tracking-tight tabular-nums",
-                    isOriginalStyle ? "text-slate-900" : "text-[var(--tf-cream)]"
-                  )}
-                >
-                  Level {formatNumber(inspectedLevelData.level)}
-                </h3>
-              </div>
-
-              <div
-                className={cn(
-                  "min-w-[11rem] rounded-full border px-3 py-1.5 text-center text-xs font-semibold uppercase tracking-[0.18em]",
-                  isOriginalStyle
-                    ? BAND_STYLES[inspectedLevelData.band.id].chip
-                    : "border-white/10 bg-white/[0.06] text-[var(--tf-cream)]"
-                )}
-              >
-                {inspectedLevelData.band.label}
-              </div>
-            </div>
-
-            <div className="mt-4 flex flex-wrap items-center gap-2">
-              <div
-                className={cn(
-                  "min-w-[9rem] rounded-full border px-3 py-1.5 text-center text-[0.7rem] font-semibold uppercase tracking-[0.18em]",
-                  isOriginalStyle
-                    ? "border-slate-200 bg-slate-100 text-slate-600"
-                    : "border-white/10 bg-black/20 text-[var(--tf-muted)]"
-                )}
-              >
-                {inspectedLevelData.band.range}
-              </div>
-              <div
-                className={cn(
-                  "min-w-[9rem] rounded-full border px-3 py-1.5 text-center text-[0.7rem] font-semibold uppercase tracking-[0.18em]",
-                  isOriginalStyle
-                    ? "border-rose-200 bg-rose-50 text-rose-700"
-                    : "border-[color:var(--tf-accent)] bg-[rgba(210,31,60,0.12)] text-[var(--tf-white)]"
-                )}
-              >
-                {selectedTrack.rewardsSummary}
-              </div>
-            </div>
-
-            <div className="mt-5 space-y-3">
-              {BATTLE_PASS_REWARD_ROWS.map((row) => {
-                const Icon = row.icon;
-                const reward = inspectedLevelData.rewards[row.id];
-                const hasReward = reward !== null;
-                const isHighlighted = isRewardHighlightedInView(
-                  battlePassTrack,
-                  row.id
-                );
-                const cardClass = !hasReward
-                  ? isOriginalStyle
-                    ? "border-slate-200 bg-slate-50/90 text-slate-500"
-                    : "border-white/10 bg-white/4 text-[var(--tf-muted)]"
-                  : isHighlighted
-                    ? row.activePanelClass
-                    : row.mutedPanelClass;
-                const iconShellClass = !hasReward
-                  ? isOriginalStyle
-                    ? "border-slate-200 bg-white text-slate-400"
-                    : "border-white/10 bg-black/20 text-[var(--tf-muted)]"
-                  : isHighlighted
-                    ? row.activePanelClass
-                    : row.mutedPanelClass;
-
-                return (
-                  <div
-                    key={row.id}
-                    className={cn(
-                      "flex items-start gap-4 rounded-[1.35rem] border p-4",
-                      cardClass
-                    )}
-                  >
-                    {reward ? (
-                      <img
-                        src={reward.imageUrl}
-                        alt={reward.name}
-                        loading="lazy"
-                        referrerPolicy="no-referrer"
-                        className={cn(
-                          "h-16 w-16 shrink-0 rounded-[1rem] border object-cover",
-                          isOriginalStyle
-                            ? "border-slate-200 bg-white"
-                            : "border-white/10 bg-black/20"
-                        )}
-                      />
-                    ) : (
-                      <div
-                        className={cn(
-                          "flex size-11 shrink-0 items-center justify-center rounded-[1rem] border",
-                          iconShellClass
-                        )}
-                      >
-                        <Icon
-                          className={cn(
-                            "h-5 w-5",
-                            hasReward ? row.iconClass : undefined
-                          )}
-                        />
-                      </div>
-                    )}
-
-                    <div className="min-w-0 flex-1">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <div className="text-sm font-semibold uppercase tracking-[0.12em]">
-                          {row.label}
-                        </div>
-                        {reward ? (
-                          <div
-                            className={cn(
-                              "rounded-full border px-2.5 py-1 text-[0.65rem] font-semibold uppercase tracking-[0.18em]",
-                              isHighlighted ? row.activePanelClass : row.mutedPanelClass
-                            )}
-                          >
-                            {reward.rarity}
-                          </div>
-                        ) : null}
-                      </div>
-                      <div className="mt-2 text-base font-semibold leading-6">
-                        {reward ? reward.name : `No ${row.label.toLowerCase()} reward`}
-                      </div>
-                      <div
-                        className={cn(
-                          "mt-1 text-[0.7rem] font-semibold uppercase tracking-[0.18em]",
-                          isOriginalStyle ? "text-slate-500" : "text-[var(--tf-muted)]"
-                        )}
-                      >
-                        {reward ? reward.type : "No unlock"}
-                      </div>
-                      <div className="mt-2 text-sm leading-6">
-                        {reward
-                          ? reward.description
-                          : `No ${row.label.toLowerCase()} reward at this level.`}
-                      </div>
-                    </div>
-
-                    <div
-                      className={cn(
-                        "rounded-full border px-3 py-1 text-[0.65rem] font-semibold uppercase tracking-[0.18em]",
-                        !hasReward
-                          ? isOriginalStyle
-                            ? "border-slate-200 bg-white text-slate-500"
-                            : "border-white/10 bg-black/20 text-[var(--tf-muted)]"
-                          : isHighlighted
-                            ? row.activePanelClass
-                            : row.mutedPanelClass
-                      )}
-                    >
-                      {hasReward ? "Reward" : "None"}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
+                  {range.label}
+                </button>
+              );
+            })}
           </div>
         </div>
 
-        <div
-          className={cn(
-            "mt-10 rounded-[2rem] border p-4 md:p-6",
-            isOriginalStyle
-              ? "border-slate-200 bg-slate-100/80 shadow-[inset_0_1px_0_rgba(255,255,255,0.72)]"
-              : "border-white/14 bg-[radial-gradient(circle_at_top,rgba(210,31,60,0.14),transparent_42%),linear-gradient(180deg,rgba(16,17,22,0.99),rgba(7,8,11,0.99))] shadow-[inset_0_1px_0_rgba(255,255,255,0.06),0_26px_60px_rgba(0,0,0,0.32)]"
-          )}
-        >
-          <div
-            className="grid gap-x-4 gap-y-5"
-            style={{
-              gridTemplateColumns: rewardMapLayoutColumns,
-            }}
-          >
-            <div
-              className={cn(
-                "pt-1 text-xs font-semibold uppercase tracking-[0.18em]",
-                isOriginalStyle ? "text-slate-500" : "text-[var(--tf-muted)]"
-              )}
-            >
-              Levels
-            </div>
-            <div
-              className="grid min-w-0 items-center gap-2"
-              style={{
-                gridTemplateColumns: rewardMapGridTemplate,
-              }}
-            >
-              {LEVEL_LABEL_MARKS.map((level) => (
-                <div
-                  key={level}
-                  style={{ gridColumnStart: level }}
-                  className={cn(
-                    "justify-self-center text-[11px] font-semibold uppercase tracking-[0.12em]",
-                    level <= battlePassLevel
-                      ? isOriginalStyle
-                        ? "text-slate-900"
-                        : "text-[var(--tf-cream)]"
-                      : isOriginalStyle
-                        ? "text-slate-400"
-                        : "text-[var(--tf-muted)]"
-                  )}
-                >
-                  {level}
-                </div>
-              ))}
-            </div>
+        <div className="mt-8 grid gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(22rem,0.44fr)]">
+          <div className="space-y-4">
+            {rangeGroups.map((range) => {
+              const rangeStyles = BAND_STYLES[range.bandId];
+              const isExpanded = activeRangeId === range.id;
 
-            <div className="space-y-4 pt-1">
-              <div className="flex min-h-10 items-center gap-2.5">
-                <div
+              return (
+                <section
+                  key={range.id}
+                  id={range.id}
                   className={cn(
-                    "flex size-9 shrink-0 items-center justify-center rounded-full border",
+                    "rounded-[1.9rem] border p-4 md:p-5",
                     isOriginalStyle
-                      ? "border-rose-200 bg-rose-50 text-rose-600"
-                      : "border-[color:var(--tf-accent)] bg-[rgba(210,31,60,0.12)] text-[var(--tf-white)]"
+                      ? "border-slate-200 bg-white/88"
+                      : "border-white/12 bg-[linear-gradient(180deg,rgba(20,21,27,0.98),rgba(10,11,15,0.96))]"
                   )}
                 >
-                  <Layers3 className="h-4 w-4" />
-                </div>
-                <div>
-                  <div
-                    className={cn(
-                      "text-[0.76rem] font-semibold uppercase leading-none tracking-[0.14em]",
-                      isOriginalStyle ? "text-rose-700" : "text-[var(--tf-white)]"
-                    )}
+                  <button
+                    type="button"
+                    onClick={() => setActiveRangeId(range.id)}
+                    className="flex w-full items-start justify-between gap-4 text-left"
                   >
-                    Progress
-                  </div>
-                  <div
-                    className={cn(
-                      "mt-1 text-[0.55rem] font-semibold uppercase tracking-[0.18em]",
-                      isOriginalStyle
-                        ? "text-slate-400"
-                        : "text-[var(--tf-muted)]"
-                    )}
-                  >
-                    {formatNumber(battlePassLevel)} / {formatNumber(TOTAL_TRACKED_LEVELS)} levels
-                  </div>
-                </div>
-              </div>
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span
+                          className={cn(
+                            "rounded-full border px-3 py-1 text-[0.68rem] font-semibold uppercase tracking-[0.18em]",
+                            isOriginalStyle
+                              ? rangeStyles.chip
+                              : isExpanded
+                                ? "border-[color:var(--tf-accent)] bg-[rgba(210,31,60,0.14)] text-[var(--tf-white)]"
+                                : "border-white/10 bg-white/[0.05] text-[var(--tf-muted)]"
+                          )}
+                        >
+                          {range.label}
+                        </span>
+                        <span
+                          className={cn(
+                            "rounded-full border px-3 py-1 text-[0.68rem] font-semibold uppercase tracking-[0.18em]",
+                            isOriginalStyle
+                              ? "border-slate-200 bg-slate-100 text-slate-600"
+                              : "border-white/10 bg-black/20 text-[var(--tf-muted)]"
+                          )}
+                        >
+                          {range.statusLabel}
+                        </span>
+                      </div>
+                      <h3 className="mt-3 text-2xl font-semibold tracking-tight">
+                        Levels {range.shortLabel}
+                      </h3>
+                      <p
+                        className={cn(
+                          "mt-2 text-sm leading-6",
+                          isOriginalStyle ? "text-slate-600" : "text-[var(--tf-muted)]"
+                        )}
+                      >
+                        {range.description}
+                      </p>
+                    </div>
 
-              {BATTLE_PASS_REWARD_ROWS.map((row) => {
-                const Icon = row.icon;
-                const isHighlighted = includedRewardTracks.includes(row.id);
-
-                return (
-                  <div key={row.id} className="flex min-h-10 items-center gap-2.5">
-                    <div
+                    <ChevronDown
                       className={cn(
-                        "flex size-9 shrink-0 items-center justify-center rounded-full border",
-                        isHighlighted
-                          ? row.activePanelClass
-                          : row.mutedPanelClass
+                        "mt-1 h-5 w-5 shrink-0 transition-transform",
+                        isExpanded ? "rotate-180" : "",
+                        isOriginalStyle ? "text-slate-400" : "text-[var(--tf-muted)]"
                       )}
-                    >
-                      <Icon className={cn("h-4 w-4", row.iconClass)} />
-                    </div>
+                    />
+                  </button>
+
+                  <div className="mt-4 grid gap-4 md:grid-cols-[minmax(0,1fr)_auto] md:items-end">
                     <div>
-                      <div
-                        className={cn(
-                          "text-[0.76rem] font-semibold uppercase leading-none tracking-[0.14em]",
-                          isHighlighted
-                            ? row.textClass
-                            : isOriginalStyle
-                              ? "text-slate-500"
-                              : "text-[var(--tf-muted)]"
-                        )}
-                      >
-                        {row.label}
+                      <Progress
+                        value={range.progress}
+                        indicatorClassName={rangeStyles.accent}
+                        className={cn("tf-progress-track h-3 rounded-full", progressTrackClass)}
+                      />
+                      <div className="mt-2 flex items-center justify-between text-[0.72rem] font-semibold uppercase tracking-[0.16em] text-[var(--tf-muted)]">
+                        <span>{formatNumber(range.completedLevels)} completed</span>
+                        <span>{range.end - range.start + 1} total</span>
                       </div>
-                      <div
-                        className={cn(
-                          "mt-1 text-[0.55rem] font-semibold uppercase tracking-[0.18em]",
-                          isOriginalStyle
-                            ? "text-slate-400"
-                            : "text-[var(--tf-muted)]"
-                        )}
-                      >
-                        {row.cadence}
-                      </div>
+                    </div>
+
+                    <div className="flex flex-wrap gap-2">
+                      {BATTLE_PASS_REWARD_ROWS.map((row) => {
+                        const hasReward = range.rewardCounts[row.id] > 0;
+
+                        return (
+                          <span
+                            key={`${range.id}-${row.id}`}
+                            className={cn(
+                              "rounded-full border px-2.5 py-1 text-[0.65rem] font-semibold uppercase tracking-[0.18em]",
+                              hasReward
+                                ? includedRewardTracks.includes(row.id)
+                                  ? row.activePanelClass
+                                  : row.mutedPanelClass
+                                : isOriginalStyle
+                                  ? "border-slate-200 bg-white text-slate-400"
+                                  : "border-white/10 bg-black/20 text-[var(--tf-muted)]"
+                            )}
+                          >
+                            {row.label} {range.rewardCounts[row.id]}
+                          </span>
+                        );
+                      })}
                     </div>
                   </div>
-                );
-              })}
 
-            </div>
-
-            <div className="relative pt-1">
-              <div
-                className={cn(
-                  "pointer-events-none absolute inset-y-0 z-0 rounded-[1rem] border",
-                  isOriginalStyle
-                    ? "border-slate-300 bg-slate-900/5"
-                    : "border-white/18 bg-[rgba(255,255,255,0.08)]"
-                )}
-                style={{
-                  left: inspectedLevelLeft,
-                  width: inspectedLevelWidth,
-                }}
-              />
-
-              <div className="relative z-10 space-y-3">
-                <div
-                  className="grid min-w-0 h-10 items-center gap-2"
-                  style={{
-                    gridTemplateColumns: rewardMapGridTemplate,
-                  }}
-                >
-                  {LEVEL_MARKS.map((level) => (
-                    <div key={`progress-${level}`} className="flex justify-center">
-                      <span
-                        className={getProgressTickClass({
-                          isCompleted: level <= battlePassLevel,
-                          isCurrentLevel: battlePassLevel > 0 && level === battlePassLevel,
-                          isOriginalStyle,
-                        })}
-                      />
-                    </div>
-                  ))}
-                </div>
-
-                {BATTLE_PASS_REWARD_ROWS.map((row) => (
-                  <div
-                    key={row.id}
-                    className="grid min-w-0 h-10 items-center gap-2"
-                    style={{
-                      gridTemplateColumns: rewardMapGridTemplate,
-                    }}
-                  >
-                    {LEVEL_MARKS.map((level) => {
-                      const hasReward = hasBattlePassRewardAtLevel(level, row.id);
+                  <div className={cn("mt-4 space-y-2", isExpanded ? "block" : "hidden xl:block")}>
+                    {range.levels.map((levelData) => {
+                      const primaryReward = getPrimaryRewardForLevel(levelData.rewards, battlePassTrack);
+                      const levelStatus = getLevelStatus(levelData.level, battlePassLevel);
 
                       return (
-                        <div key={`${row.id}-${level}`} className="flex justify-center">
-                          {hasReward ? (
-                            <span
-                              className={getRewardTickClass({
-                                isHighlighted: includedRewardTracks.includes(row.id),
-                                isSelected: inspectedLevel === level,
-                                activeTickClass: row.activeTickClass,
-                                mutedTickClass: row.mutedTickClass,
-                              })}
+                        <button
+                          key={levelData.level}
+                          type="button"
+                          onClick={() => inspectLevel(levelData.level, range.id)}
+                          className={cn(
+                            "group flex w-full items-center gap-4 rounded-[1.35rem] border p-4 text-left transition",
+                            inspectedLevel === levelData.level
+                              ? isOriginalStyle
+                                ? "border-rose-200 bg-rose-50/85 shadow-[0_12px_30px_rgba(244,63,94,0.1)]"
+                                : "border-[color:var(--tf-accent)] bg-[rgba(210,31,60,0.12)]"
+                              : isOriginalStyle
+                                ? "border-slate-200 bg-slate-50/70 hover:border-slate-300 hover:bg-white"
+                                : "border-white/10 bg-white/[0.03] hover:bg-white/[0.06]"
+                          )}
+                        >
+                          <div className="w-[4.25rem] shrink-0">
+                            <div
+                              className={cn(
+                                "text-[0.62rem] font-semibold uppercase tracking-[0.18em]",
+                                isOriginalStyle ? "text-slate-500" : "text-[var(--tf-muted)]"
+                              )}
+                            >
+                              Level
+                            </div>
+                            <div
+                              className={cn(
+                                "mt-1 text-2xl font-semibold tracking-tight tabular-nums",
+                                isOriginalStyle ? "text-slate-900" : "text-[var(--tf-cream)]"
+                              )}
+                            >
+                              {levelData.level}
+                            </div>
+                          </div>
+
+                          {primaryReward ? (
+                            <img
+                              src={primaryReward.reward.imageUrl}
+                              alt={primaryReward.reward.name}
+                              loading="lazy"
+                              referrerPolicy="no-referrer"
+                              className={cn(
+                                "hidden h-14 w-14 shrink-0 rounded-[1rem] border object-cover sm:block",
+                                isOriginalStyle ? "border-slate-200 bg-white" : "border-white/10 bg-black/20"
+                              )}
                             />
                           ) : null}
-                        </div>
+
+                          <div className="min-w-0 flex-1">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <span
+                                className={cn(
+                                  "rounded-full border px-2.5 py-1 text-[0.62rem] font-semibold uppercase tracking-[0.18em]",
+                                  levelStatus === "current"
+                                    ? isOriginalStyle
+                                      ? "border-rose-200 bg-rose-50 text-rose-700"
+                                      : "border-[color:var(--tf-accent)] bg-[rgba(210,31,60,0.14)] text-[var(--tf-white)]"
+                                    : levelStatus === "claimed"
+                                      ? isOriginalStyle
+                                        ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                                        : "border-emerald-400/30 bg-emerald-400/10 text-emerald-200"
+                                      : isOriginalStyle
+                                        ? "border-slate-200 bg-white text-slate-500"
+                                        : "border-white/10 bg-black/20 text-[var(--tf-muted)]"
+                                )}
+                              >
+                                {levelStatus === "current" ? "Current" : levelStatus === "claimed" ? "Claimed" : `+${Math.max(0, levelData.level - battlePassLevel)}`}
+                              </span>
+                              {primaryReward ? (
+                                <span
+                                  className={cn(
+                                    "rounded-full border px-2.5 py-1 text-[0.62rem] font-semibold uppercase tracking-[0.18em]",
+                                    getRewardTrackMeta(primaryReward.track).activePanelClass
+                                  )}
+                                >
+                                  {getRewardTrackMeta(primaryReward.track).label}
+                                </span>
+                              ) : null}
+                            </div>
+
+                            <div
+                              className={cn(
+                                "mt-2 truncate text-base font-semibold",
+                                isOriginalStyle ? "text-slate-900" : "text-[var(--tf-cream)]"
+                              )}
+                            >
+                              {primaryReward ? primaryReward.reward.name : "No reward in the current view"}
+                            </div>
+                            <div
+                              className={cn(
+                                "mt-1 truncate text-sm",
+                                isOriginalStyle ? "text-slate-600" : "text-[var(--tf-muted)]"
+                              )}
+                            >
+                              {primaryReward ? `${primaryReward.reward.rarity} · ${primaryReward.reward.type}` : "Open the level to see the full track breakdown."}
+                            </div>
+
+                            <div className="mt-3 flex flex-wrap gap-2">
+                              {BATTLE_PASS_REWARD_ROWS.map((row) => {
+                                const hasReward = levelData.rewards[row.id] !== null;
+
+                                return (
+                                  <span
+                                    key={`${levelData.level}-${row.id}`}
+                                    className={cn(
+                                      "rounded-full border px-2.5 py-1 text-[0.62rem] font-semibold uppercase tracking-[0.18em]",
+                                      hasReward
+                                        ? includedRewardTracks.includes(row.id)
+                                          ? row.activePanelClass
+                                          : row.mutedPanelClass
+                                        : isOriginalStyle
+                                          ? "border-slate-200 bg-white text-slate-400"
+                                          : "border-white/10 bg-black/20 text-[var(--tf-muted)]"
+                                    )}
+                                  >
+                                    {row.label}
+                                  </span>
+                                );
+                              })}
+                            </div>
+                          </div>
+
+                          <ChevronRight
+                            className={cn(
+                              "h-5 w-5 shrink-0",
+                              isOriginalStyle ? "text-slate-300" : "text-white/30"
+                            )}
+                          />
+                        </button>
                       );
                     })}
                   </div>
-                ))}
-              </div>
+                </section>
+              );
+            })}
+          </div>
 
-              <div
-                className="absolute inset-0 z-20 grid"
-                style={{
-                  gridTemplateColumns: rewardMapGridTemplate,
-                  gridTemplateRows: "1fr",
-                }}
-              >
-                {LEVEL_MARKS.map((level) => (
-                  <button
-                    key={level}
-                    type="button"
-                    className="h-full w-full cursor-pointer bg-transparent"
-                    onMouseEnter={() => setInspectedLevel(level)}
-                    onFocus={() => setInspectedLevel(level)}
-                    onClick={() => setInspectedLevel(level)}
-                    title={`Level ${level}`}
-                    aria-label={`Inspect level ${level}. ${getRewardPreviewCopy(level, "premium")}. ${getRewardPreviewCopy(level, "free")}. ${getRewardPreviewCopy(level, "ultimate")}.`}
-                  />
-                ))}
-              </div>
+          <div className="hidden xl:block">
+            <div className="sticky top-24">
+              <BattlePassRewardDetailPanel
+                inspectedLevelData={inspectedLevelData}
+                battlePassTrack={battlePassTrack}
+                currentLevel={battlePassLevel}
+                isOriginalStyle={isOriginalStyle}
+              />
             </div>
           </div>
         </div>
       </motion.section>
+
+      <AnimatePresence>
+        {isMobileDetailOpen ? (
+          <>
+            <motion.button
+              type="button"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.18 }}
+              onClick={() => setIsMobileDetailOpen(false)}
+              className="fixed inset-0 z-40 bg-black/55 xl:hidden"
+              aria-label="Close reward details"
+            />
+
+            <motion.div
+              initial={{ y: "100%" }}
+              animate={{ y: 0 }}
+              exit={{ y: "100%" }}
+              transition={{ duration: 0.22, ease: "easeOut" }}
+              className="fixed inset-x-0 bottom-0 z-50 max-h-[85vh] overflow-y-auto rounded-t-[2rem] px-4 pb-4 xl:hidden"
+            >
+              <BattlePassRewardDetailPanel
+                inspectedLevelData={inspectedLevelData}
+                battlePassTrack={battlePassTrack}
+                currentLevel={battlePassLevel}
+                isOriginalStyle={isOriginalStyle}
+                onClose={() => setIsMobileDetailOpen(false)}
+              />
+            </motion.div>
+          </>
+        ) : null}
+      </AnimatePresence>
     </>
+  );
+}
+
+function BattlePassOverviewCard({
+  label,
+  value,
+  body,
+  isOriginalStyle,
+  valueClassName,
+}: {
+  label: string;
+  value: string;
+  body: string;
+  isOriginalStyle: boolean;
+  valueClassName?: string;
+}) {
+  return (
+    <div
+      className={cn(
+        "rounded-[1.5rem] border p-4",
+        isOriginalStyle
+          ? "border-slate-200 bg-white/85"
+          : "border-white/10 bg-white/[0.04]"
+      )}
+    >
+      <div
+        className={cn(
+          "text-xs font-semibold uppercase tracking-[0.18em]",
+          isOriginalStyle ? "text-slate-500" : "text-[var(--tf-muted)]"
+        )}
+      >
+        {label}
+      </div>
+      <div
+        className={cn(
+          "mt-3 text-2xl font-semibold tracking-tight",
+          isOriginalStyle ? "text-slate-900" : "text-[var(--tf-cream)]",
+          valueClassName
+        )}
+      >
+        {value}
+      </div>
+      <div
+        className={cn(
+          "mt-2 text-sm leading-6",
+          isOriginalStyle ? "text-slate-600" : "text-[var(--tf-muted)]"
+        )}
+      >
+        {body}
+      </div>
+    </div>
+  );
+}
+
+function BattlePassNextRewardCard({
+  track,
+  nextReward,
+  isOriginalStyle,
+  isActiveView,
+}: {
+  track: BattlePassTrack;
+  nextReward: ReturnType<typeof getNextRewardForTrack>;
+  isOriginalStyle: boolean;
+  isActiveView: boolean;
+}) {
+  const row = getRewardTrackMeta(track);
+  const title = isActiveView ? `Next ${row.label} in view` : `Next ${row.label}`;
+  const TrackIcon = row.icon;
+
+  return (
+    <div
+      className={cn(
+        "rounded-[1.5rem] border p-4",
+        nextReward
+          ? isActiveView
+            ? row.activePanelClass
+            : row.mutedPanelClass
+          : isOriginalStyle
+            ? "border-slate-200 bg-white/85 text-slate-500"
+            : "border-white/10 bg-white/[0.04] text-[var(--tf-muted)]"
+      )}
+    >
+      <div className="flex items-start gap-3">
+        {nextReward ? (
+          <img
+            src={nextReward.reward.imageUrl}
+            alt={nextReward.reward.name}
+            loading="lazy"
+            referrerPolicy="no-referrer"
+            className={cn(
+              "h-14 w-14 shrink-0 rounded-[1rem] border object-cover",
+              isOriginalStyle ? "border-slate-200 bg-white" : "border-white/10 bg-black/20"
+            )}
+          />
+        ) : (
+          <div
+            className={cn(
+              "flex h-14 w-14 shrink-0 items-center justify-center rounded-[1rem] border",
+              isOriginalStyle
+                ? "border-slate-200 bg-white text-slate-400"
+                : "border-white/10 bg-black/20 text-[var(--tf-muted)]"
+            )}
+          >
+            <TrackIcon className="h-5 w-5" />
+          </div>
+        )}
+
+        <div className="min-w-0 flex-1">
+          <div className="text-[0.68rem] font-semibold uppercase tracking-[0.18em]">
+            {title}
+          </div>
+          <div className="mt-2 text-base font-semibold leading-6">
+            {nextReward ? nextReward.reward.name : "Complete"}
+          </div>
+          <div className="mt-1 text-sm">
+            {nextReward
+              ? `Level ${nextReward.level} · ${nextReward.reward.type}`
+              : "No rewards left on this track."}
+          </div>
+          <div className="mt-2 text-[0.72rem] font-semibold uppercase tracking-[0.18em]">
+            {nextReward ? `+${nextReward.levelsAway} levels away` : "Finished"}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function BattlePassRewardDetailPanel({
+  inspectedLevelData,
+  battlePassTrack,
+  currentLevel,
+  isOriginalStyle,
+  onClose,
+}: {
+  inspectedLevelData: BattlePassLevelRowData;
+  battlePassTrack: BattlePassTrack;
+  currentLevel: number;
+  isOriginalStyle: boolean;
+  onClose?: () => void;
+}) {
+  const levelStatus = getLevelStatus(inspectedLevelData.level, currentLevel);
+  const primaryReward = getPrimaryRewardForLevel(
+    inspectedLevelData.rewards,
+    battlePassTrack
+  );
+  const bandStyles = BAND_STYLES[inspectedLevelData.band.id];
+
+  return (
+    <div
+      className={cn(
+        "rounded-[1.9rem] border p-5 md:p-6",
+        isOriginalStyle
+          ? "border-slate-200 bg-white/95 shadow-[0_20px_50px_rgba(15,23,42,0.08)]"
+          : "border-white/12 bg-[linear-gradient(180deg,rgba(18,19,25,0.98),rgba(10,11,15,0.98))] shadow-[0_26px_60px_rgba(0,0,0,0.34)]"
+      )}
+    >
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <div
+            className={cn(
+              "text-xs font-semibold uppercase tracking-[0.18em]",
+              isOriginalStyle ? "text-slate-500" : "text-[var(--tf-muted)]"
+            )}
+          >
+            Level Focus
+          </div>
+          <h3 className="mt-2 text-3xl font-semibold tracking-tight">
+            Level {formatNumber(inspectedLevelData.level)}
+          </h3>
+        </div>
+
+        {onClose ? (
+          <button
+            type="button"
+            onClick={onClose}
+            className={cn(
+              "inline-flex items-center justify-center rounded-full border p-2 transition",
+              isOriginalStyle
+                ? "border-slate-200 bg-white text-slate-600 hover:border-slate-300"
+                : "border-white/10 bg-white/[0.05] text-[var(--tf-muted)] hover:bg-white/[0.08] hover:text-[var(--tf-cream)]"
+            )}
+            aria-label="Close reward details"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        ) : null}
+      </div>
+
+      <div className="mt-4 flex flex-wrap gap-2">
+        <span
+          className={cn(
+            "rounded-full border px-3 py-1 text-[0.68rem] font-semibold uppercase tracking-[0.18em]",
+            isOriginalStyle ? bandStyles.chip : "border-white/10 bg-white/[0.05] text-[var(--tf-cream)]"
+          )}
+        >
+          {inspectedLevelData.band.label}
+        </span>
+        <span
+          className={cn(
+            "rounded-full border px-3 py-1 text-[0.68rem] font-semibold uppercase tracking-[0.18em]",
+            levelStatus === "current"
+              ? isOriginalStyle
+                ? "border-rose-200 bg-rose-50 text-rose-700"
+                : "border-[color:var(--tf-accent)] bg-[rgba(210,31,60,0.14)] text-[var(--tf-white)]"
+              : levelStatus === "claimed"
+                ? isOriginalStyle
+                  ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                  : "border-emerald-400/30 bg-emerald-400/10 text-emerald-200"
+                : isOriginalStyle
+                  ? "border-slate-200 bg-slate-100 text-slate-600"
+                  : "border-white/10 bg-black/20 text-[var(--tf-muted)]"
+          )}
+        >
+          {levelStatus === "current"
+            ? "Current level"
+            : levelStatus === "claimed"
+              ? "Claimed"
+              : `${Math.max(0, inspectedLevelData.level - currentLevel)} levels away`}
+        </span>
+      </div>
+
+      <div
+        className={cn(
+          "mt-5 rounded-[1.5rem] border p-4",
+          isOriginalStyle
+            ? "border-slate-200 bg-slate-50/90"
+            : "border-white/10 bg-white/[0.04]"
+        )}
+      >
+        {primaryReward ? (
+          <div className="flex items-start gap-4">
+            <img
+              src={primaryReward.reward.imageUrl}
+              alt={primaryReward.reward.name}
+              loading="lazy"
+              referrerPolicy="no-referrer"
+              className={cn(
+                "h-[4.75rem] w-[4.75rem] shrink-0 rounded-[1rem] border object-cover",
+                isOriginalStyle ? "border-slate-200 bg-white" : "border-white/10 bg-black/20"
+              )}
+            />
+            <div className="min-w-0">
+              <div
+                className={cn(
+                  "inline-flex rounded-full border px-2.5 py-1 text-[0.68rem] font-semibold uppercase tracking-[0.18em]",
+                  getRewardTrackMeta(primaryReward.track).activePanelClass
+                )}
+              >
+                {getRewardTrackMeta(primaryReward.track).label}
+              </div>
+              <div className="mt-3 text-xl font-semibold leading-7">
+                {primaryReward.reward.name}
+              </div>
+              <div
+                className={cn(
+                  "mt-1 text-[0.72rem] font-semibold uppercase tracking-[0.18em]",
+                  isOriginalStyle ? "text-slate-500" : "text-[var(--tf-muted)]"
+                )}
+              >
+                {primaryReward.reward.rarity} · {primaryReward.reward.type}
+              </div>
+              <div
+                className={cn(
+                  "mt-3 text-sm leading-6",
+                  isOriginalStyle ? "text-slate-600" : "text-[var(--tf-muted)]"
+                )}
+              >
+                {primaryReward.reward.description}
+              </div>
+            </div>
+          </div>
+        ) : (
+          <div className="flex items-start gap-4">
+            <div
+              className={cn(
+                "flex h-[4.75rem] w-[4.75rem] shrink-0 items-center justify-center rounded-[1rem] border",
+                isOriginalStyle
+                  ? "border-slate-200 bg-white text-slate-400"
+                  : "border-white/10 bg-black/20 text-[var(--tf-muted)]"
+              )}
+            >
+              <Target className="h-6 w-6" />
+            </div>
+            <div>
+              <div className="text-xl font-semibold leading-7">
+                No highlighted reward on this level
+              </div>
+              <div
+                className={cn(
+                  "mt-3 text-sm leading-6",
+                  isOriginalStyle ? "text-slate-600" : "text-[var(--tf-muted)]"
+                )}
+              >
+                This level has no reward in the current view. The track cards below still show every tier attached to this level.
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+
+      <div className="mt-5 space-y-3">
+        {BATTLE_PASS_REWARD_ROWS.map((row) => {
+          const Icon = row.icon;
+          const reward = inspectedLevelData.rewards[row.id];
+          const hasReward = reward !== null;
+          const isHighlighted = isRewardHighlightedInView(
+            battlePassTrack,
+            row.id
+          );
+          const cardClass = !hasReward
+            ? isOriginalStyle
+              ? "border-slate-200 bg-slate-50/90 text-slate-500"
+              : "border-white/10 bg-white/4 text-[var(--tf-muted)]"
+            : isHighlighted
+              ? row.activePanelClass
+              : row.mutedPanelClass;
+          const iconShellClass = !hasReward
+            ? isOriginalStyle
+              ? "border-slate-200 bg-white text-slate-400"
+              : "border-white/10 bg-black/20 text-[var(--tf-muted)]"
+            : isHighlighted
+              ? row.activePanelClass
+              : row.mutedPanelClass;
+
+          return (
+            <div
+              key={row.id}
+              className={cn(
+                "flex items-start gap-4 rounded-[1.35rem] border p-4",
+                cardClass
+              )}
+            >
+              {reward ? (
+                <img
+                  src={reward.imageUrl}
+                  alt={reward.name}
+                  loading="lazy"
+                  referrerPolicy="no-referrer"
+                  className={cn(
+                    "h-16 w-16 shrink-0 rounded-[1rem] border object-cover",
+                    isOriginalStyle
+                      ? "border-slate-200 bg-white"
+                      : "border-white/10 bg-black/20"
+                  )}
+                />
+              ) : (
+                <div
+                  className={cn(
+                    "flex size-11 shrink-0 items-center justify-center rounded-[1rem] border",
+                    iconShellClass
+                  )}
+                >
+                  <Icon
+                    className={cn(
+                      "h-5 w-5",
+                      hasReward ? row.iconClass : undefined
+                    )}
+                  />
+                </div>
+              )}
+
+              <div className="min-w-0 flex-1">
+                <div className="flex flex-wrap items-center gap-2">
+                  <div className="text-sm font-semibold uppercase tracking-[0.12em]">
+                    {row.label}
+                  </div>
+                  {reward ? (
+                    <div
+                      className={cn(
+                        "rounded-full border px-2.5 py-1 text-[0.65rem] font-semibold uppercase tracking-[0.18em]",
+                        isHighlighted ? row.activePanelClass : row.mutedPanelClass
+                      )}
+                    >
+                      {reward.rarity}
+                    </div>
+                  ) : null}
+                </div>
+                <div className="mt-2 text-base font-semibold leading-6">
+                  {reward ? reward.name : `No ${row.label.toLowerCase()} reward`}
+                </div>
+                <div
+                  className={cn(
+                    "mt-1 text-[0.7rem] font-semibold uppercase tracking-[0.18em]",
+                    isOriginalStyle ? "text-slate-500" : "text-[var(--tf-muted)]"
+                  )}
+                >
+                  {reward ? reward.type : "No unlock"}
+                </div>
+                <div className="mt-2 text-sm leading-6">
+                  {reward
+                    ? reward.description
+                    : `No ${row.label.toLowerCase()} reward at this level.`}
+                </div>
+              </div>
+
+              <div
+                className={cn(
+                  "rounded-full border px-3 py-1 text-[0.65rem] font-semibold uppercase tracking-[0.18em]",
+                  !hasReward
+                    ? isOriginalStyle
+                      ? "border-slate-200 bg-white text-slate-500"
+                      : "border-white/10 bg-black/20 text-[var(--tf-muted)]"
+                    : isHighlighted
+                      ? row.activePanelClass
+                      : row.mutedPanelClass
+                )}
+              >
+                {hasReward ? "Reward" : "None"}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
   );
 }
 
