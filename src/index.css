@@ -280,6 +280,71 @@ html[data-style-mode="original"] {
       linear-gradient(180deg, rgba(229, 230, 232, 0.94), rgba(245, 245, 246, 0.97));
   }
 
+  .tf-marquee-shell {
+    position: relative;
+    overflow: hidden;
+    background: linear-gradient(180deg, rgba(6, 7, 10, 0.62), rgba(6, 7, 10, 0.28));
+    padding-block: 0.7rem;
+  }
+
+  html[data-style-mode="original"] .tf-marquee-shell {
+    background: linear-gradient(180deg, rgba(15, 23, 42, 0.16), rgba(15, 23, 42, 0.06));
+  }
+
+  .tf-marquee-track {
+    display: flex;
+    width: max-content;
+    animation: tf-marquee-scroll 38s linear infinite;
+    will-change: transform;
+  }
+
+  .tf-marquee-group {
+    display: flex;
+    flex-shrink: 0;
+    align-items: center;
+    gap: 0;
+    padding-inline-end: 0;
+  }
+
+  .tf-marquee-item {
+    color: var(--tf-cream);
+    display: inline-flex;
+    align-items: center;
+    font-size: 0.76rem;
+    font-weight: 700;
+    letter-spacing: 0.26em;
+    text-shadow: 0 0 18px rgba(0, 0, 0, 0.22);
+    text-transform: uppercase;
+    white-space: nowrap;
+  }
+
+  .tf-marquee-item > span {
+    margin-right: 0.42em;
+  }
+
+  .tf-marquee-icon {
+    width: 0.95rem;
+    height: 0.95rem;
+    flex-shrink: 0;
+    margin-right: 0.68em;
+    object-fit: contain;
+    opacity: 0.92;
+  }
+
+  html[data-style-mode="original"] .tf-marquee-item {
+    color: rgb(15 23 42 / 0.8);
+  }
+
+  @keyframes tf-marquee-scroll {
+    from {
+      transform: translateX(0);
+    }
+
+    to {
+      transform: translateX(-50%);
+    }
+  }
+
   .tf-kicker {
     color: var(--tf-muted);
     font-size: 0.72rem;

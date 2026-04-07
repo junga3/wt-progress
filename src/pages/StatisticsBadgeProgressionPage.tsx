@@ -309,7 +309,7 @@ export function StatisticsBadgeProgressionPage({
             <div
               key={`game-input-${stat.id}`}
               className={cn(
-                "grid items-center gap-4 px-4 py-4 md:grid-cols-[minmax(0,1fr)_minmax(180px,240px)] md:px-6",
+                "grid items-center gap-4 px-4 py-4 md:grid-cols-[minmax(0,1fr)_minmax(380px,560px)] md:px-6",
                 index !== 0 ? "border-t border-white/10" : ""
               )}
             >
@@ -320,20 +320,36 @@ export function StatisticsBadgeProgressionPage({
                 {stat.gameLabel}
               </label>
 
-              <Input
-                id={`game-input-${stat.id}`}
-                type="text"
-                inputMode="numeric"
-                value={formatGameInputValue(inputs[stat.id])}
-                onChange={(event) =>
-                  setInputs((prev) => ({
-                    ...prev,
-                    [stat.id]: sanitizeNumericInput(event.target.value),
-                  }))
-                }
-                className="h-auto border-none bg-transparent px-0 py-0 text-right text-3xl font-semibold uppercase italic leading-none tracking-[0.02em] text-white shadow-none focus-visible:ring-0 md:text-4xl"
-                placeholder={stat.placeholder}
-              />
+              <div className="relative min-w-0">
+                <div
+                  aria-hidden="true"
+                  className="pointer-events-none absolute inset-0 flex items-center justify-end overflow-visible px-4 md:px-5"
+                >
+                  <span
+                    className={cn(
+                      "block whitespace-nowrap text-right text-3xl font-semibold uppercase italic leading-none tracking-[0.02em] [font-variant-numeric:tabular-nums] md:text-4xl",
+                      inputs[stat.id] ? "text-white" : "text-white/35"
+                    )}
+                  >
+                    {formatGameInputValue(inputs[stat.id]) || stat.placeholder}
+                  </span>
+                </div>
+
+                <Input
+                  id={`game-input-${stat.id}`}
+                  type="text"
+                  inputMode="numeric"
+                  value={formatGameInputValue(inputs[stat.id])}
+                  onChange={(event) =>
+                    setInputs((prev) => ({
+                      ...prev,
+                      [stat.id]: sanitizeNumericInput(event.target.value),
+                    }))
+                  }
+                  className="relative z-10 h-auto border-none bg-transparent px-4 py-0 text-right text-3xl font-semibold uppercase italic leading-none tracking-[0.02em] text-transparent caret-white shadow-none [font-variant-numeric:tabular-nums] selection:bg-white/15 focus-visible:ring-0 md:px-5 md:text-4xl"
+                  placeholder=""
+                />
+              </div>
             </div>
           ))}
         </div>

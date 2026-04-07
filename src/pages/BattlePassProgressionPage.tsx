@@ -1,11 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import {
-  ChevronDown,
   ChevronRight,
   Crown,
   Gift,
-  Layers3,
   PanelBottomOpen,
   Star,
   Target,
@@ -247,10 +245,10 @@ const BATTLE_PASS_REWARD_ROWS = [
   },
 ];
 
-type BattlePassRangeGroup = {
+type BattlePassPageGroup = {
   id: string;
   label: string;
-  shortLabel: string;
+  levelRangeLabel: string;
   description: string;
   start: number;
   end: number;
@@ -262,7 +260,7 @@ type BattlePassLevelRowData = {
   rewards: BattlePassLevelRewards;
 };
 
-type BattlePassRangeGroupData = BattlePassRangeGroup & {
+type BattlePassPageGroupData = BattlePassPageGroup & {
   bandId: BattlePassBandId;
   completedLevels: number;
   progress: number;
@@ -271,59 +269,59 @@ type BattlePassRangeGroupData = BattlePassRangeGroup & {
   levels: BattlePassLevelRowData[];
 };
 
-const BATTLE_PASS_RANGE_GROUPS: BattlePassRangeGroup[] = [
+const BATTLE_PASS_PAGE_GROUPS: BattlePassPageGroup[] = [
   {
-    id: "range-1-16",
-    label: "Entry 1-16",
-    shortLabel: "1-16",
-    description: "Opening rewards",
+    id: "pages-1-2",
+    label: "Pages 1-2",
+    levelRangeLabel: "Levels 1-16",
+    description: "Opening pages",
     start: 1,
     end: 16,
   },
   {
-    id: "range-17-32",
-    label: "Entry 17-32",
-    shortLabel: "17-32",
+    id: "pages-3-4",
+    label: "Pages 3-4",
+    levelRangeLabel: "Levels 17-32",
     description: "Closing the opening run",
     start: 17,
     end: 32,
   },
   {
-    id: "range-33-48",
-    label: "Middle 33-48",
-    shortLabel: "33-48",
+    id: "pages-5-6",
+    label: "Pages 5-6",
+    levelRangeLabel: "Levels 33-48",
     description: "Mid-pass spotlight rewards",
     start: 33,
     end: 48,
   },
   {
-    id: "range-49-64",
-    label: "Middle 49-64",
-    shortLabel: "49-64",
+    id: "pages-7-8",
+    label: "Pages 7-8",
+    levelRangeLabel: "Levels 49-64",
     description: "Mid-pass finishers",
     start: 49,
     end: 64,
   },
   {
-    id: "range-65-80",
-    label: "Later 65-80",
-    shortLabel: "65-80",
+    id: "pages-9-10",
+    label: "Pages 9-10",
+    levelRangeLabel: "Levels 65-80",
     description: "Late-pass power picks",
     start: 65,
     end: 80,
   },
   {
-    id: "range-81-96",
-    label: "Later 81-96",
-    shortLabel: "81-96",
+    id: "pages-11-12",
+    label: "Pages 11-12",
+    levelRangeLabel: "Levels 81-96",
     description: "Late-pass finish line",
     start: 81,
     end: 96,
   },
   {
-    id: "range-97-106",
-    label: "Bonus 97-106",
-    shortLabel: "97-106",
+    id: "bonus-pages-1-2",
+    label: "Bonus Pages 1-2",
+    levelRangeLabel: "Levels 97-106",
     description: "Bonus pages",
     start: 97,
     end: 106,
@@ -447,14 +445,35 @@ function getRewardTrackMeta(track: BattlePassTrack) {
   return BATTLE_PASS_REWARD_ROWS.find((row) => row.id === track) ?? BATTLE_PASS_REWARD_ROWS[0];
 }
 
-function getRangeGroupForLevel(level: number) {
+function getPageGroupForLevel(level: number) {
   const safeLevel = clampRewardPreviewLevel(level);
 
   return (
-    BATTLE_PASS_RANGE_GROUPS.find(
+    BATTLE_PASS_PAGE_GROUPS.find(
       (group) => safeLevel >= group.start && safeLevel <= group.end
-    ) ?? BATTLE_PASS_RANGE_GROUPS[0]
+    ) ?? BATTLE_PASS_PAGE_GROUPS[0]
   );
+}
+
+function getPreferredLevelForPageGroup(
+  group: BattlePassPageGroup,
+  currentLevel: number
+) {
+  if (currentLevel >= group.start && currentLevel <= group.end) {
+    return clampRewardPreviewLevel(currentLevel);
+  }
+
+  return group.start;
+}
+
+function getBattlePassPageLabel(level: number) {
+  const safeLevel = clampRewardPreviewLevel(level);
+
+  if (safeLevel <= MAIN_TRACK_LEVELS) {
+    return `Page ${Math.ceil(safeLevel / 8)}`;
+  }
+
+  return safeLevel <= 101 ? "Bonus Page 1" : "Bonus Page 2";
 }
 
 function getPrimaryRewardForLevel(
@@ -466,26 +485,6 @@ function getPrimaryRewardForLevel(
 
     if (reward) {
       return { track, reward };
-    }
-  }
-
-  return null;
-}
-
-function getNextRewardForTrack(level: number, track: BattlePassTrack) {
-  for (
-    let nextLevel = Math.max(1, Math.min(TOTAL_TRACKED_LEVELS, level + 1));
-    nextLevel <= TOTAL_TRACKED_LEVELS;
-    nextLevel += 1
-  ) {
-    const reward = getBattlePassRewardAtLevel(nextLevel, track);
-
-    if (reward) {
-      return {
-        level: nextLevel,
-        levelsAway: nextLevel - level,
-        reward,
-      };
     }
   }
 
@@ -516,8 +515,8 @@ export function BattlePassProgressionPage({
   const [inspectedLevel, setInspectedLevel] = useState(() =>
     clampRewardPreviewLevel(initialSavedState.battlePassLevel || 1)
   );
-  const [activeRangeId, setActiveRangeId] = useState(() =>
-    getRangeGroupForLevel(initialSavedState.battlePassLevel || 1).id
+  const [activePageGroupId, setActivePageGroupId] = useState(() =>
+    getPageGroupForLevel(initialSavedState.battlePassLevel || 1).id
   );
   const [isMobileDetailOpen, setIsMobileDetailOpen] = useState(false);
   const isOriginalStyle = styleMode === "original";
@@ -555,14 +554,6 @@ export function BattlePassProgressionPage({
   const bonusLevelsLeft = Math.max(0, BONUS_LEVELS - bonusCompletedLevels);
   const totalLevelsLeft = Math.max(0, TOTAL_TRACKED_LEVELS - battlePassLevel);
   const includedRewardTracks = TRACKS_VISIBLE_BY_PASS[battlePassTrack];
-  const nextRewards = useMemo(
-    () =>
-      TRACK_PRIORITY_BY_VIEW[battlePassTrack].map((track) => ({
-        track,
-        data: getNextRewardForTrack(battlePassLevel, track),
-      })),
-    [battlePassLevel, battlePassTrack]
-  );
 
   const levelRewardMap = useMemo(
     (): BattlePassLevelRowData[] =>
@@ -583,9 +574,9 @@ export function BattlePassProgressionPage({
       levelRewardMap[0],
     [inspectedLevel, levelRewardMap]
   );
-  const rangeGroups = useMemo(
-    (): BattlePassRangeGroupData[] =>
-      BATTLE_PASS_RANGE_GROUPS.map((group) => {
+  const pageGroups = useMemo(
+    (): BattlePassPageGroupData[] =>
+      BATTLE_PASS_PAGE_GROUPS.map((group) => {
         const levels = levelRewardMap.filter(
           (item) => item.level >= group.start && item.level <= group.end
         );
@@ -624,7 +615,7 @@ export function BattlePassProgressionPage({
     setSavedState((currentState) => ({ ...currentState, battlePassLevel: safeLevel }));
     setInputValue(String(safeLevel));
     setInspectedLevel(clampRewardPreviewLevel(safeLevel || 1));
-    setActiveRangeId(getRangeGroupForLevel(safeLevel || 1).id);
+    setActivePageGroupId(getPageGroupForLevel(safeLevel || 1).id);
   }
 
   function saveInputLevel() {
@@ -641,19 +632,17 @@ export function BattlePassProgressionPage({
     });
   }
 
-  function focusRange(rangeId: string) {
-    setActiveRangeId(rangeId);
+  function focusPageGroup(pageGroupId: string) {
+    const nextGroup = pageGroups.find((group) => group.id === pageGroupId);
+    if (!nextGroup) return;
 
-    if (typeof document === "undefined") return;
-    document.getElementById(rangeId)?.scrollIntoView({
-      behavior: "smooth",
-      block: "start",
-    });
+    setActivePageGroupId(pageGroupId);
+    setInspectedLevel(getPreferredLevelForPageGroup(nextGroup, battlePassLevel));
   }
 
-  function inspectLevel(level: number, rangeId: string) {
+  function inspectLevel(level: number, pageGroupId: string) {
     setInspectedLevel(level);
-    setActiveRangeId(rangeId);
+    setActivePageGroupId(pageGroupId);
 
     if (typeof window !== "undefined" && window.innerWidth < 1280) {
       setIsMobileDetailOpen(true);
@@ -715,7 +704,7 @@ export function BattlePassProgressionPage({
         </div>
       </div>
 
-      <div className="mt-8 grid gap-6 xl:grid-cols-[minmax(0,1.25fr)_minmax(22rem,0.75fr)]">
+      <div className="mt-8 space-y-6">
         <motion.section
           initial={{ opacity: 0, y: 16 }}
           animate={{ opacity: 1, y: 0 }}
@@ -753,64 +742,7 @@ export function BattlePassProgressionPage({
                     Level {formatNumber(battlePassLevel)}
                   </div>
                 </div>
-                <div className="mt-3 max-w-xl text-base leading-7 text-[var(--tf-muted)]">
-                  {currentBand.subtitle}
-                </div>
               </div>
-
-              <div
-                className={cn(
-                  "inline-flex min-w-[11rem] items-center justify-center gap-2 rounded-full border px-4 py-2 text-center text-sm font-medium shadow-sm",
-                  activeBandStyles.chip
-                )}
-              >
-                <Layers3 className="h-4 w-4" />
-                {currentBand.label}
-              </div>
-            </div>
-
-            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-              <BattlePassOverviewCard
-                label="Current Band"
-                value={currentBand.label}
-                body={currentBand.subtitle}
-                isOriginalStyle={isOriginalStyle}
-              />
-              <BattlePassOverviewCard
-                label="Track View"
-                value={selectedTrack.label}
-                body={selectedTrack.rewardsSummary}
-                isOriginalStyle={isOriginalStyle}
-                valueClassName={isOriginalStyle ? "text-rose-700" : "text-[var(--tf-white)]"}
-              />
-              <BattlePassOverviewCard
-                label="Next Checkpoint"
-                value={currentBand.nextCheckpoint}
-                body={
-                  currentBand.levelsLeftInBand === 0
-                    ? "Everything in this band is complete."
-                    : `${formatNumber(currentBand.levelsLeftInBand)} levels left in ${currentBand.label.toLowerCase()}.`
-                }
-                isOriginalStyle={isOriginalStyle}
-              />
-              <BattlePassOverviewCard
-                label="Levels Left"
-                value={totalLevelsLeft === 0 ? "Complete" : `${formatNumber(totalLevelsLeft)} left`}
-                body={`${formatNumber(battlePassLevel)} / ${formatNumber(TOTAL_TRACKED_LEVELS)} levels claimed`}
-                isOriginalStyle={isOriginalStyle}
-              />
-            </div>
-
-            <div className="grid gap-4 md:grid-cols-3">
-              {nextRewards.map(({ track, data }) => (
-                <BattlePassNextRewardCard
-                  key={track}
-                  track={track}
-                  nextReward={data}
-                  isOriginalStyle={isOriginalStyle}
-                  isActiveView={track === battlePassTrack}
-                />
-              ))}
             </div>
 
             <div className="space-y-6">
@@ -868,13 +800,14 @@ export function BattlePassProgressionPage({
           </div>
         </motion.section>
 
+        <div className="grid gap-6 xl:grid-cols-[minmax(22rem,0.82fr)_minmax(0,1.18fr)]">
         <motion.aside
           initial={{ opacity: 0, y: 16 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.08, duration: 0.35 }}
           id="battle-pass-tracker"
           className={cn(
-            "w-full min-w-0 rounded-[2.25rem] p-6 md:p-8 xl:sticky xl:top-24 xl:h-fit",
+            "w-full min-w-0 rounded-[2.25rem] p-6 md:p-8",
             isOriginalStyle
               ? "border border-white/70 bg-white/80 text-slate-900 shadow-[0_20px_60px_rgba(15,23,42,0.08)] backdrop-blur-xl"
               : "tf-panel text-white"
@@ -1014,6 +947,21 @@ export function BattlePassProgressionPage({
             </button>
           </div>
         </motion.aside>
+
+        <motion.section
+          initial={{ opacity: 0, y: 16 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.12, duration: 0.35 }}
+          className="min-w-0"
+        >
+          <BattlePassRewardDetailPanel
+            inspectedLevelData={inspectedLevelData}
+            battlePassTrack={battlePassTrack}
+            currentLevel={battlePassLevel}
+            isOriginalStyle={isOriginalStyle}
+          />
+        </motion.section>
+        </div>
       </div>
 
       <motion.section
@@ -1039,7 +987,7 @@ export function BattlePassProgressionPage({
               Browse Rewards
             </div>
             <h2 className="mt-2 text-3xl font-semibold tracking-tight">
-              All 106 levels, chunked for every screen
+              Pages 1-12 plus bonus pages
             </h2>
             <p
               className={cn(
@@ -1047,72 +995,73 @@ export function BattlePassProgressionPage({
                 isOriginalStyle ? "text-slate-600" : "text-[var(--tf-muted)]"
               )}
             >
-              Scan progression in compact ranges, tap any level for full reward details, and keep every track readable on both phone and desktop.
+              Pick a page pair to inspect, with your current level page loaded first.
             </p>
           </div>
           <div className="flex snap-x gap-2 overflow-x-auto pb-1">
-            {rangeGroups.map((range) => {
-              const rangeStyles = BAND_STYLES[range.bandId];
-              const isActive = activeRangeId === range.id;
+            {pageGroups.map((group) => {
+              const groupStyles = BAND_STYLES[group.bandId];
+              const isActive = activePageGroupId === group.id;
 
               return (
                 <button
-                  key={range.id}
+                  key={group.id}
                   type="button"
-                  onClick={() => focusRange(range.id)}
+                  onClick={() => focusPageGroup(group.id)}
                   className={cn(
                     "snap-start whitespace-nowrap rounded-full border px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] transition",
                     isActive
                       ? isOriginalStyle
-                        ? rangeStyles.chip
+                        ? groupStyles.chip
                         : "border-[color:var(--tf-accent)] bg-[rgba(210,31,60,0.14)] text-[var(--tf-white)]"
                       : isOriginalStyle
                         ? "border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50"
                         : "border-white/10 bg-white/[0.04] text-[var(--tf-muted)] hover:bg-white/[0.08] hover:text-[var(--tf-cream)]"
                   )}
                 >
-                  {range.label}
+                  {group.label}
                 </button>
               );
             })}
           </div>
         </div>
 
-        <div className="mt-8 grid gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(22rem,0.44fr)]">
+        <div className="mt-8">
           <div className="space-y-4">
-            {rangeGroups.map((range) => {
-              const rangeStyles = BAND_STYLES[range.bandId];
-              const isExpanded = activeRangeId === range.id;
+            {pageGroups.map((group) => {
+              const groupStyles = BAND_STYLES[group.bandId];
+              const isActiveGroup = activePageGroupId === group.id;
 
               return (
                 <section
-                  key={range.id}
-                  id={range.id}
+                  key={group.id}
+                  id={group.id}
                   className={cn(
                     "rounded-[1.9rem] border p-4 md:p-5",
-                    isOriginalStyle
-                      ? "border-slate-200 bg-white/88"
-                      : "border-white/12 bg-[linear-gradient(180deg,rgba(20,21,27,0.98),rgba(10,11,15,0.96))]"
+                    isActiveGroup ? "block" : "hidden",
+                    isActiveGroup
+                      ? isOriginalStyle
+                        ? "border-rose-200 bg-white shadow-[0_16px_40px_rgba(244,63,94,0.08)]"
+                        : "border-[color:var(--tf-accent)] bg-[linear-gradient(180deg,rgba(26,18,24,0.98),rgba(11,8,12,0.98))]"
+                      : isOriginalStyle
+                        ? "border-slate-200 bg-white/88"
+                        : "border-white/12 bg-[linear-gradient(180deg,rgba(20,21,27,0.98),rgba(10,11,15,0.96))]"
                   )}
                 >
-                  <button
-                    type="button"
-                    onClick={() => setActiveRangeId(range.id)}
-                    className="flex w-full items-start justify-between gap-4 text-left"
-                  >
+                  <div className="flex w-full items-start justify-between gap-4 text-left">
                     <div className="min-w-0">
                       <div className="flex flex-wrap items-center gap-2">
                         <span
                           className={cn(
                             "rounded-full border px-3 py-1 text-[0.68rem] font-semibold uppercase tracking-[0.18em]",
                             isOriginalStyle
-                              ? rangeStyles.chip
-                              : isExpanded
+                              ? groupStyles.chip
+                              : isActiveGroup
                                 ? "border-[color:var(--tf-accent)] bg-[rgba(210,31,60,0.14)] text-[var(--tf-white)]"
                                 : "border-white/10 bg-white/[0.05] text-[var(--tf-muted)]"
                           )}
                         >
-                          {range.label}
+                          {group.label}
                         </span>
                         <span
                           className={cn(
@@ -1122,11 +1071,21 @@ export function BattlePassProgressionPage({
                               : "border-white/10 bg-black/20 text-[var(--tf-muted)]"
                           )}
                         >
-                          {range.statusLabel}
+                          {group.statusLabel}
+                        </span>
+                        <span
+                          className={cn(
+                            "rounded-full border px-3 py-1 text-[0.68rem] font-semibold uppercase tracking-[0.18em]",
+                            isOriginalStyle
+                              ? "border-slate-200 bg-white text-slate-500"
+                              : "border-white/10 bg-black/20 text-[var(--tf-muted)]"
+                          )}
+                        >
+                          {group.levelRangeLabel}
                         </span>
                       </div>
                       <h3 className="mt-3 text-2xl font-semibold tracking-tight">
-                        Levels {range.shortLabel}
+                        {group.label}
                       </h3>
                       <p
                         className={cn(
@@ -1134,39 +1093,31 @@ export function BattlePassProgressionPage({
                           isOriginalStyle ? "text-slate-600" : "text-[var(--tf-muted)]"
                         )}
                       >
-                        {range.description}
+                        {group.description}
                       </p>
                     </div>
-
-                    <ChevronDown
-                      className={cn(
-                        "mt-1 h-5 w-5 shrink-0 transition-transform",
-                        isExpanded ? "rotate-180" : "",
-                        isOriginalStyle ? "text-slate-400" : "text-[var(--tf-muted)]"
-                      )}
-                    />
-                  </button>
+                  </div>
 
                   <div className="mt-4 grid gap-4 md:grid-cols-[minmax(0,1fr)_auto] md:items-end">
                     <div>
                       <Progress
-                        value={range.progress}
-                        indicatorClassName={rangeStyles.accent}
+                        value={group.progress}
+                        indicatorClassName={groupStyles.accent}
                         className={cn("tf-progress-track h-3 rounded-full", progressTrackClass)}
                       />
                       <div className="mt-2 flex items-center justify-between text-[0.72rem] font-semibold uppercase tracking-[0.16em] text-[var(--tf-muted)]">
-                        <span>{formatNumber(range.completedLevels)} completed</span>
-                        <span>{range.end - range.start + 1} total</span>
+                        <span>{formatNumber(group.completedLevels)} completed</span>
+                        <span>{group.end - group.start + 1} total</span>
                       </div>
                     </div>
 
                     <div className="flex flex-wrap gap-2">
                       {BATTLE_PASS_REWARD_ROWS.map((row) => {
-                        const hasReward = range.rewardCounts[row.id] > 0;
+                        const hasReward = group.rewardCounts[row.id] > 0;
 
                         return (
                           <span
-                            key={`${range.id}-${row.id}`}
+                            key={`${group.id}-${row.id}`}
                             className={cn(
                               "rounded-full border px-2.5 py-1 text-[0.65rem] font-semibold uppercase tracking-[0.18em]",
                               hasReward
@@ -1178,25 +1129,24 @@ export function BattlePassProgressionPage({
                                   : "border-white/10 bg-black/20 text-[var(--tf-muted)]"
                             )}
                           >
-                            {row.label} {range.rewardCounts[row.id]}
+                            {row.label} {group.rewardCounts[row.id]}
                           </span>
                         );
                       })}
                     </div>
                   </div>
 
-                  <div className={cn("mt-4 space-y-2", isExpanded ? "block" : "hidden xl:block")}>
-                    {range.levels.map((levelData) => {
-                      const primaryReward = getPrimaryRewardForLevel(levelData.rewards, battlePassTrack);
+                  <div className="mt-4 grid gap-2 md:grid-cols-2">
+                    {group.levels.map((levelData) => {
                       const levelStatus = getLevelStatus(levelData.level, battlePassLevel);
 
                       return (
                         <button
                           key={levelData.level}
                           type="button"
-                          onClick={() => inspectLevel(levelData.level, range.id)}
+                          onClick={() => inspectLevel(levelData.level, group.id)}
                           className={cn(
-                            "group flex w-full items-center gap-4 rounded-[1.35rem] border p-4 text-left transition",
+                            "group flex w-full flex-col rounded-[1.2rem] border p-3 text-left transition",
                             inspectedLevel === levelData.level
                               ? isOriginalStyle
                                 ? "border-rose-200 bg-rose-50/85 shadow-[0_12px_30px_rgba(244,63,94,0.1)]"
@@ -1206,40 +1156,35 @@ export function BattlePassProgressionPage({
                                 : "border-white/10 bg-white/[0.03] hover:bg-white/[0.06]"
                           )}
                         >
-                          <div className="w-[4.25rem] shrink-0">
-                            <div
-                              className={cn(
-                                "text-[0.62rem] font-semibold uppercase tracking-[0.18em]",
-                                isOriginalStyle ? "text-slate-500" : "text-[var(--tf-muted)]"
-                              )}
-                            >
-                              Level
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="min-w-0">
+                              <div
+                                className={cn(
+                                  "text-[0.62rem] font-semibold uppercase tracking-[0.18em]",
+                                  isOriginalStyle ? "text-slate-500" : "text-[var(--tf-muted)]"
+                                )}
+                              >
+                                Level
+                              </div>
+                              <div
+                                className={cn(
+                                  "mt-1 text-2xl font-semibold tracking-tight tabular-nums",
+                                  isOriginalStyle ? "text-slate-900" : "text-[var(--tf-cream)]"
+                                )}
+                              >
+                                {levelData.level}
+                              </div>
+                              <div
+                                className={cn(
+                                  "mt-1 text-[0.68rem] font-semibold uppercase tracking-[0.16em]",
+                                  isOriginalStyle ? "text-slate-500" : "text-[var(--tf-muted)]"
+                                )}
+                              >
+                                {getBattlePassPageLabel(levelData.level)}
+                              </div>
                             </div>
-                            <div
-                              className={cn(
-                                "mt-1 text-2xl font-semibold tracking-tight tabular-nums",
-                                isOriginalStyle ? "text-slate-900" : "text-[var(--tf-cream)]"
-                              )}
-                            >
-                              {levelData.level}
-                            </div>
-                          </div>
 
-                          {primaryReward ? (
-                            <img
-                              src={primaryReward.reward.imageUrl}
-                              alt={primaryReward.reward.name}
-                              loading="lazy"
-                              referrerPolicy="no-referrer"
-                              className={cn(
-                                "hidden h-14 w-14 shrink-0 rounded-[1rem] border object-cover sm:block",
-                                isOriginalStyle ? "border-slate-200 bg-white" : "border-white/10 bg-black/20"
-                              )}
-                            />
-                          ) : null}
-
-                          <div className="min-w-0 flex-1">
-                            <div className="flex flex-wrap items-center gap-2">
+                            <div className="flex flex-col items-end gap-2">
                               <span
                                 className={cn(
                                   "rounded-full border px-2.5 py-1 text-[0.62rem] font-semibold uppercase tracking-[0.18em]",
@@ -1258,66 +1203,38 @@ export function BattlePassProgressionPage({
                               >
                                 {levelStatus === "current" ? "Current" : levelStatus === "claimed" ? "Claimed" : `+${Math.max(0, levelData.level - battlePassLevel)}`}
                               </span>
-                              {primaryReward ? (
-                                <span
-                                  className={cn(
-                                    "rounded-full border px-2.5 py-1 text-[0.62rem] font-semibold uppercase tracking-[0.18em]",
-                                    getRewardTrackMeta(primaryReward.track).activePanelClass
-                                  )}
-                                >
-                                  {getRewardTrackMeta(primaryReward.track).label}
-                                </span>
-                              ) : null}
-                            </div>
-
-                            <div
-                              className={cn(
-                                "mt-2 truncate text-base font-semibold",
-                                isOriginalStyle ? "text-slate-900" : "text-[var(--tf-cream)]"
-                              )}
-                            >
-                              {primaryReward ? primaryReward.reward.name : "No reward in the current view"}
-                            </div>
-                            <div
-                              className={cn(
-                                "mt-1 truncate text-sm",
-                                isOriginalStyle ? "text-slate-600" : "text-[var(--tf-muted)]"
-                              )}
-                            >
-                              {primaryReward ? `${primaryReward.reward.rarity} · ${primaryReward.reward.type}` : "Open the level to see the full track breakdown."}
-                            </div>
-
-                            <div className="mt-3 flex flex-wrap gap-2">
-                              {BATTLE_PASS_REWARD_ROWS.map((row) => {
-                                const hasReward = levelData.rewards[row.id] !== null;
-
-                                return (
-                                  <span
-                                    key={`${levelData.level}-${row.id}`}
-                                    className={cn(
-                                      "rounded-full border px-2.5 py-1 text-[0.62rem] font-semibold uppercase tracking-[0.18em]",
-                                      hasReward
-                                        ? includedRewardTracks.includes(row.id)
-                                          ? row.activePanelClass
-                                          : row.mutedPanelClass
-                                        : isOriginalStyle
-                                          ? "border-slate-200 bg-white text-slate-400"
-                                          : "border-white/10 bg-black/20 text-[var(--tf-muted)]"
-                                    )}
-                                  >
-                                    {row.label}
-                                  </span>
-                                );
-                              })}
+                              <ChevronRight
+                                className={cn(
+                                  "h-4 w-4 shrink-0",
+                                  isOriginalStyle ? "text-slate-300" : "text-white/30"
+                                )}
+                              />
                             </div>
                           </div>
 
-                          <ChevronRight
-                            className={cn(
-                              "h-5 w-5 shrink-0",
-                              isOriginalStyle ? "text-slate-300" : "text-white/30"
-                            )}
-                          />
+                          <div className="mt-3 flex flex-wrap gap-2">
+                            {BATTLE_PASS_REWARD_ROWS.map((row) => {
+                              const hasReward = levelData.rewards[row.id] !== null;
+
+                              return (
+                                <span
+                                  key={`${levelData.level}-${row.id}`}
+                                  className={cn(
+                                    "rounded-full border px-2.5 py-1 text-[0.62rem] font-semibold uppercase tracking-[0.18em]",
+                                    hasReward
+                                      ? includedRewardTracks.includes(row.id)
+                                        ? row.activePanelClass
+                                        : row.mutedPanelClass
+                                      : isOriginalStyle
+                                        ? "border-slate-200 bg-white text-slate-400"
+                                        : "border-white/10 bg-black/20 text-[var(--tf-muted)]"
+                                  )}
+                                >
+                                  {row.label}
+                                </span>
+                              );
+                            })}
+                          </div>
                         </button>
                       );
                     })}
@@ -1325,17 +1242,6 @@ export function BattlePassProgressionPage({
                 </section>
               );
             })}
-          </div>
-
-          <div className="hidden xl:block">
-            <div className="sticky top-24">
-              <BattlePassRewardDetailPanel
-                inspectedLevelData={inspectedLevelData}
-                battlePassTrack={battlePassTrack}
-                currentLevel={battlePassLevel}
-                isOriginalStyle={isOriginalStyle}
-              />
-            </div>
           </div>
         </div>
       </motion.section>
@@ -1376,131 +1282,6 @@ export function BattlePassProgressionPage({
   );
 }
 
-function BattlePassOverviewCard({
-  label,
-  value,
-  body,
-  isOriginalStyle,
-  valueClassName,
-}: {
-  label: string;
-  value: string;
-  body: string;
-  isOriginalStyle: boolean;
-  valueClassName?: string;
-}) {
-  return (
-    <div
-      className={cn(
-        "rounded-[1.5rem] border p-4",
-        isOriginalStyle
-          ? "border-slate-200 bg-white/85"
-          : "border-white/10 bg-white/[0.04]"
-      )}
-    >
-      <div
-        className={cn(
-          "text-xs font-semibold uppercase tracking-[0.18em]",
-          isOriginalStyle ? "text-slate-500" : "text-[var(--tf-muted)]"
-        )}
-      >
-        {label}
-      </div>
-      <div
-        className={cn(
-          "mt-3 text-2xl font-semibold tracking-tight",
-          isOriginalStyle ? "text-slate-900" : "text-[var(--tf-cream)]",
-          valueClassName
-        )}
-      >
-        {value}
-      </div>
-      <div
-        className={cn(
-          "mt-2 text-sm leading-6",
-          isOriginalStyle ? "text-slate-600" : "text-[var(--tf-muted)]"
-        )}
-      >
-        {body}
-      </div>
-    </div>
-  );
-}
-
-function BattlePassNextRewardCard({
-  track,
-  nextReward,
-  isOriginalStyle,
-  isActiveView,
-}: {
-  track: BattlePassTrack;
-  nextReward: ReturnType<typeof getNextRewardForTrack>;
-  isOriginalStyle: boolean;
-  isActiveView: boolean;
-}) {
-  const row = getRewardTrackMeta(track);
-  const title = isActiveView ? `Next ${row.label} in view` : `Next ${row.label}`;
-  const TrackIcon = row.icon;
-
-  return (
-    <div
-      className={cn(
-        "rounded-[1.5rem] border p-4",
-        nextReward
-          ? isActiveView
-            ? row.activePanelClass
-            : row.mutedPanelClass
-          : isOriginalStyle
-            ? "border-slate-200 bg-white/85 text-slate-500"
-            : "border-white/10 bg-white/[0.04] text-[var(--tf-muted)]"
-      )}
-    >
-      <div className="flex items-start gap-3">
-        {nextReward ? (
-          <img
-            src={nextReward.reward.imageUrl}
-            alt={nextReward.reward.name}
-            loading="lazy"
-            referrerPolicy="no-referrer"
-            className={cn(
-              "h-14 w-14 shrink-0 rounded-[1rem] border object-cover",
-              isOriginalStyle ? "border-slate-200 bg-white" : "border-white/10 bg-black/20"
-            )}
-          />
-        ) : (
-          <div
-            className={cn(
-              "flex h-14 w-14 shrink-0 items-center justify-center rounded-[1rem] border",
-              isOriginalStyle
-                ? "border-slate-200 bg-white text-slate-400"
-                : "border-white/10 bg-black/20 text-[var(--tf-muted)]"
-            )}
-          >
-            <TrackIcon className="h-5 w-5" />
-          </div>
-        )}
-
-        <div className="min-w-0 flex-1">
-          <div className="text-[0.68rem] font-semibold uppercase tracking-[0.18em]">
-            {title}
-          </div>
-          <div className="mt-2 text-base font-semibold leading-6">
-            {nextReward ? nextReward.reward.name : "Complete"}
-          </div>
-          <div className="mt-1 text-sm">
-            {nextReward
-              ? `Level ${nextReward.level} · ${nextReward.reward.type}`
-              : "No rewards left on this track."}
-          </div>
-          <div className="mt-2 text-[0.72rem] font-semibold uppercase tracking-[0.18em]">
-            {nextReward ? `+${nextReward.levelsAway} levels away` : "Finished"}
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 function BattlePassRewardDetailPanel({
   inspectedLevelData,
   battlePassTrack,
@@ -1520,6 +1301,7 @@ function BattlePassRewardDetailPanel({
     battlePassTrack
   );
   const bandStyles = BAND_STYLES[inspectedLevelData.band.id];
+  const pageLabel = getBattlePassPageLabel(inspectedLevelData.level);
 
   return (
     <div
@@ -1570,6 +1352,16 @@ function BattlePassRewardDetailPanel({
           )}
         >
           {inspectedLevelData.band.label}
+        </span>
+        <span
+          className={cn(
+            "rounded-full border px-3 py-1 text-[0.68rem] font-semibold uppercase tracking-[0.18em]",
+            isOriginalStyle
+              ? "border-slate-200 bg-white text-slate-600"
+              : "border-white/10 bg-black/20 text-[var(--tf-muted)]"
+          )}
+        >
+          {pageLabel}
         </span>
         <span
           className={cn(

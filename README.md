@@ -106,6 +106,23 @@ Current version: `0.4`
 
 Each page is live, mobile-friendly, saved in local storage, and available in both light and dark mode.
 
+## Branch Notes
+
+### `codex/battle-pass-responsive-redesign` - April 7, 2026
+
+This branch is currently being used for ongoing layout and UX exploration work that has not been merged into `main` yet.
+
+**Today's Progress**
+
+- Reworked the `Battle Pass Progression` layout so the top progress box spans the full content width.
+- Moved the Battle Pass tracker below the progress box and paired `Level Focus` beside it for a cleaner second-row layout.
+- Reworked Battle Pass browsing from raw level chunks into page-pair views like `Pages 1-2`, `Pages 3-4`, and `Bonus Pages 1-2`.
+- Updated the Battle Pass page selector so it opens on the player's current page group first and switches views in place instead of scrolling.
+- Shortened the Battle Pass browse area by compacting the level cards and removing the per-level highlighted reward preview from the list.
+- Removed extra Battle Pass overview cards for `Current Band`, `Track View`, `Next Checkpoint`, `Levels Left`, and the `Next Free`, `Next Premium`, and `Next Ultimate` cards.
+- Fixed the `Statistics Badge Progression` number-entry clipping issue by changing the stat inputs to use an overlay display for the large right-aligned values.
+- Added a fixed top ticker across the site that loops `THE FINALS` branding with the local `finalsicon.png` asset as the separator.
+
 ## Future Plans
 
 - Add a proper landing page with the new brand, clearer page cards, and a stronger "pick your tracker" entry flow.
