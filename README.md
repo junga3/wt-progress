@@ -6,6 +6,28 @@ Live site: [https://junga3.github.io/wt-progress/](https://junga3.github.io/wt-p
 
 ## Patch Notes
 
+### `0.5` - April 7, 2026
+
+Merged `codex/battle-pass-responsive-redesign` into `main` in [`a37cdeb`](https://github.com/junga3/wt-progress/commit/a37cdeba73fe1f188e3b012bd636dc62556576b7).
+
+**New Features**
+
+- Added a fixed site-wide top ticker that loops `THE FINALS` branding with the local `finalsicon.png` asset.
+- Added a page-pair Battle Pass browser flow for `Pages 1-2` through `Pages 11-12` plus `Bonus Pages 1-2`.
+
+**Gameplay UI Updates**
+
+- Reworked the `Battle Pass Progression` layout so the top progress panel spans the full content width.
+- Moved the Battle Pass tracker below the progress panel and paired `Level Focus` beside it in a cleaner second-row layout.
+- Updated the Battle Pass browser so the active page group is shown first based on the player's current level and switches in place instead of scrolling.
+- Shortened the Battle Pass browse section by compacting the level cards and removing the per-level highlighted reward preview from the list.
+
+**Polish**
+
+- Removed extra Battle Pass overview cards for `Current Band`, `Track View`, `Next Checkpoint`, `Levels Left`, and the `Next Free`, `Next Premium`, and `Next Ultimate` reward summaries.
+- Refined the shared top ticker spacing, pacing, and icon separator treatment to better fit the site styling.
+- Fixed the `Statistics Badge Progression` stat-entry clipping issue by changing the number inputs to an overlay display for large right-aligned values.
+
 ### `0.4` - April 6, 2026
 
 Merged `codex/april-6-ui-polish` into `main` in [`6abf987`](https://github.com/junga3/wt-progress/commit/6abf9875d9db18d0b4ff10e0a18451472b0b0ede).
@@ -102,26 +124,9 @@ The app currently ships with three routed tools:
 - `Statistics Badge Progression`
 - `Battle Pass Progression`
 
-Current version: `0.4`
+Current version: `0.5`
 
 Each page is live, mobile-friendly, saved in local storage, and available in both light and dark mode.
-
-## Branch Notes
-
-### `codex/battle-pass-responsive-redesign` - April 7, 2026
-
-This branch is currently being used for ongoing layout and UX exploration work that has not been merged into `main` yet.
-
-**Today's Progress**
-
-- Reworked the `Battle Pass Progression` layout so the top progress box spans the full content width.
-- Moved the Battle Pass tracker below the progress box and paired `Level Focus` beside it for a cleaner second-row layout.
-- Reworked Battle Pass browsing from raw level chunks into page-pair views like `Pages 1-2`, `Pages 3-4`, and `Bonus Pages 1-2`.
-- Updated the Battle Pass page selector so it opens on the player's current page group first and switches views in place instead of scrolling.
-- Shortened the Battle Pass browse area by compacting the level cards and removing the per-level highlighted reward preview from the list.
-- Removed extra Battle Pass overview cards for `Current Band`, `Track View`, `Next Checkpoint`, `Levels Left`, and the `Next Free`, `Next Premium`, and `Next Ultimate` cards.
-- Fixed the `Statistics Badge Progression` number-entry clipping issue by changing the stat inputs to use an overlay display for the large right-aligned values.
-- Added a fixed top ticker across the site that loops `THE FINALS` branding with the local `finalsicon.png` asset as the separator.
 
 ## Future Plans
 
