@@ -14,6 +14,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
+import finalsIcon from "@/assets/finalsicon.png";
 import { cn } from "@/lib/utils";
 import { BattlePassProgressionPage } from "@/pages/BattlePassProgressionPage";
 import { StatisticsBadgeProgressionPage } from "@/pages/StatisticsBadgeProgressionPage";
@@ -182,6 +183,7 @@ const SITE_OPTIONS = [
     preview: "Battle Pass progress, level bands, and bonus tracking",
   },
 ];
+const TICKER_ITEMS = Array.from({ length: 16 }, () => "THE FINALS");
 
 const formatNumber = (value: number) => new Intl.NumberFormat().format(Math.max(0, Math.round(value)));
 const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
@@ -509,7 +511,37 @@ export default function WTProgressAppleRedesign() {
         />
       </div>
 
-      <div className="relative mx-auto max-w-6xl px-4 py-8 md:px-6 lg:px-8">
+      <div className="pointer-events-none fixed inset-x-0 top-0 z-40">
+        <div className="tf-marquee-shell">
+          <div className="tf-marquee-track">
+            {[0, 1].map((duplicateIndex) => (
+              <div
+                key={`ticker-dup-${duplicateIndex}`}
+                className="tf-marquee-group"
+                aria-hidden={duplicateIndex === 1}
+              >
+                {TICKER_ITEMS.map((item, itemIndex) => (
+                  <span
+                    key={`ticker-${duplicateIndex}-${itemIndex}`}
+                    className="tf-marquee-item"
+                  >
+                    <span>{item}</span>
+                    <img
+                      src={finalsIcon}
+                      alt=""
+                      aria-hidden="true"
+                      className="tf-marquee-icon"
+                    />
+                  </span>
+                ))}
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      <div className="relative mx-auto max-w-6xl px-4 pb-8 pt-20 md:px-6 lg:px-8">
+
         <motion.header
           initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
